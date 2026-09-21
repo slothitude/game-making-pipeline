@@ -40,10 +40,10 @@ jobs:
     steps:
       # The godot image is minimal: no git, no unzip. actions/checkout needs git in
       # the container (node itself is mounted in from the runner), so install first.
-      - name: Install git + unzip (godot image is minimal)
+      - name: Install git + unzip + fontconfig (godot image is minimal)
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git unzip ca-certificates
+          apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig
 
       # The GMP repo itself: full checkout, sparse-checkout not used (no paths worth
       # pruning — this repo is small by law).
@@ -103,10 +103,10 @@ jobs:
           mkdir -p deploy
           cp -r arcade/build/web/. deploy/
 
-      # Cross-repo push, so the workflow's GITHUB_TOKEN is not enough — this clones
-      # the game repo with GAMES_TOKEN over HTTPS, replaces the web_deploy tree with
-      # deploy/, and pushes. Pages picks the commit up automatically.
-      - name: Push deploy/ to the game's web_deploy branch
+      # Cross-repo push to the game's deploy branch (Pages serves it). The game
+      # repo's main = full source; deploy = web export only. This clones deploy,
+      # replaces its tree with the fresh export, and pushes.
+      - name: Push export to the game's deploy branch (Pages)
         if: ${{ inputs.deploy }}
         env:
           GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
@@ -114,10 +114,10 @@ jobs:
           set -e
           DEPLOY_URL="https://x-access-token:${GAMES_TOKEN}@github.com/slothitude/${GAME_SLUG}.git"
           rm -rf arcade_deploy
-          if ! git clone --depth 1 --branch web_deploy "${DEPLOY_URL}" arcade_deploy; then
-            echo "web_deploy does not exist yet on ${GAME_SLUG} — creating an orphan branch"
+          if ! git clone --depth 1 --branch deploy "${DEPLOY_URL}" arcade_deploy; then
+            echo "deploy branch does not exist yet on ${GAME_SLUG} — creating it"
             mkdir arcade_deploy
-            git -C arcade_deploy init --initial-branch web_deploy
+            git -C arcade_deploy init --initial-branch deploy
             git -C arcade_deploy remote add origin "${DEPLOY_URL}"
           fi
           find arcade_deploy -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
@@ -126,4 +126,4 @@ jobs:
           git -C arcade_deploy config user.email "actions@users.noreply.github.com"
           git -C arcade_deploy add -A
           git -C arcade_deploy commit -m "CI deploy from GMP"
-          git -C arcade_deploy push origin web_deploy
+          git -C arcade_deploy push origin deploy
