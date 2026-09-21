@@ -31,3 +31,10 @@ jobs:
      
       - name: Process pending feedback, then exit
         run: python3 cloud_editor/cloud_editor.py --once
+      - name: Commit runtime state (git is the database)
+        run: |
+          git config user.name gmp-runtime
+          git config user.email actions@users.noreply.github.com
+          git add runtime/ 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "runtime state update"
+          git push
