@@ -1,0 +1,14 @@
+{
+  "id": "wo-new-20260922-0001",
+  "from_telegram_id": 123456789,
+  "template": "arcade",
+  "title": "Marta's Word Arcade",
+  "palette": {
+    "bg": "#0f1420",
+    "ink": "#f1f5f9",
+    "accent": "#e9c46a",
+    "board": "#1d3557"
+  },
+  "slug": "marta-word-arcade",
+  "status": "new"
+}

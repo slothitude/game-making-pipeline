@@ -1,0 +1,7 @@
+{
+  "from_telegram_id": 123456789,
+  "template": "arcade",
+  "title": "Neon Word Arcade",
+  "palette": "#7C4DFF",
+  "slug": "neon-word-arcade"
+}

@@ -1,0 +1,129 @@
+name: Games CI
+
+# Dispatch-only on purpose. This repo (GMP) holds the pipeline — schemas, docs,
+# workflows — not game code, so there are no push paths worth filtering. The gates
+# live in the GAME repo and run here on demand:
+#   gh workflow run games-ci.yml -f game=octogram-arcade
+#   gh workflow run games-ci.yml -f game=octogram-arcade -f deploy=true
+# Run it with deploy=true only for a real release; plain runs re-prove the wall.
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Game repo to gate (owner: slothitude)"
+        required: true
+        default: octogram-arcade
+        type: choice
+        options:
+          - octogram-arcade
+      deploy:
+        description: "After a green wall: export Web and push to web_deploy"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  gate-wall:
+    name: Gate wall (7 suites) + optional Web deploy
+    runs-on: ubuntu-latest
+    container:
+      # The reproducible headless gate/export runner — no Rog required.
+      # NOTE: this image ships the Godot editor only, NOT export templates; the
+      # bootstrap step below fetches the matching templates when deploying.
+      image: docker://godot:latest
+    env:
+      GAME_SLUG: ${{ inputs.game }}
+    steps:
+      # The godot image is minimal: no git, no unzip. actions/checkout needs git in
+      # the container (node itself is mounted in from the runner), so install first.
+      - name: Install git + unzip (godot image is minimal)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git unzip ca-certificates
+
+      # The GMP repo itself: full checkout, sparse-checkout not used (no paths worth
+      # pruning — this repo is small by law).
+      - name: Checkout GMP (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout game repo into ./arcade
+        uses: actions/checkout@v4
+        with:
+          repository: slothitude/${{ inputs.game }}
+          token: ${{ secrets.GAMES_TOKEN }} # cross-repo read; PAT with repo scope (see README)
+          path: arcade
+          submodules: false
+
+      # Only needed for deploy: godot:latest has the editor but no export templates,
+      # so --export-release "Web" would fail with "no template found" without this.
+      - name: Bootstrap Web export templates
+        if: ${{ inputs.deploy }}
+        run: |
+          set -e
+          V="$(godot --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)"
+          TPL_DIR="${HOME}/.local/share/godot/export_templates/${V}.stable"
+          if [ ! -d "${TPL_DIR}" ]; then
+            echo "Downloading export templates for Godot ${V}..."
+            curl -fsSL -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${V}-stable/Godot_v${V}-stable_export_templates.tpz"
+            unzip -q -o /tmp/templates.tpz -d /tmp/templates
+            mkdir -p "${TPL_DIR}"
+            mv /tmp/templates/templates/* "${TPL_DIR}/"
+          else
+            echo "Templates for ${V} already present."
+          fi
+
+      # Import once so .godot/imported exists before any suite or export runs.
+      - name: Import project (once, before the wall)
+        run: godot --headless --path arcade --import
+
+      # THE GATE WALL — same 7 suites cloud_editor runs on Rog. Any non-zero exit
+      # stops the job here: nothing exports, nothing deploys past a red wall.
+      - name: Run the gate wall (7 suites)
+        run: |
+          set -e
+          for suite in run_tests run_rpg_tests smoke_battle smoke_menu run_e2e run8_tests run8_e2e; do
+            echo "::group::gate: ${suite}"
+            godot --headless --path arcade --script "res://tests/${suite}.gd"
+            echo "::endgroup::"
+          done
+
+      - name: Export Web
+        if: ${{ inputs.deploy }}
+        # Uses the game repo's "Web" preset (export_path: build/web/index.html).
+        run: godot --headless --path arcade --export-release "Web"
+
+      - name: Collect build into deploy/
+        if: ${{ inputs.deploy }}
+        run: |
+          mkdir -p deploy
+          cp -r arcade/build/web/. deploy/
+
+      # Cross-repo push, so the workflow's GITHUB_TOKEN is not enough — this clones
+      # the game repo with GAMES_TOKEN over HTTPS, replaces the web_deploy tree with
+      # deploy/, and pushes. Pages picks the commit up automatically.
+      - name: Push deploy/ to the game's web_deploy branch
+        if: ${{ inputs.deploy }}
+        env:
+          GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+        run: |
+          set -e
+          DEPLOY_URL="https://x-access-token:${GAMES_TOKEN}@github.com/slothitude/${GAME_SLUG}.git"
+          rm -rf arcade_deploy
+          if ! git clone --depth 1 --branch web_deploy "${DEPLOY_URL}" arcade_deploy; then
+            echo "web_deploy does not exist yet on ${GAME_SLUG} — creating an orphan branch"
+            mkdir arcade_deploy
+            git -C arcade_deploy init --initial-branch web_deploy
+            git -C arcade_deploy remote add origin "${DEPLOY_URL}"
+          fi
+          find arcade_deploy -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r deploy/. arcade_deploy/
+          git -C arcade_deploy config user.name "gmp-ci"
+          git -C arcade_deploy config user.email "actions@users.noreply.github.com"
+          git -C arcade_deploy add -A
+          git -C arcade_deploy commit -m "CI deploy from GMP"
+          git -C arcade_deploy push origin web_deploy

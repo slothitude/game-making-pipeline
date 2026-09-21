@@ -1,0 +1,33 @@
+name: Pipeline poll
+
+# The cloud loop, one pass at a time: pull pending feedback, run it through the
+# editor (glm triage -> diff -> gate wall -> deploy -> Telegram reply), then exit.
+# `--once` processes pending feedback and exits; the Rog loop runs the SAME script
+# with no flag and keeps polling. This job assumes cloud_editor v2 conventions
+# (env-var config: TG_TOKEN / NVAPI_KEY / CHAT_ID, CLOUD=1 for cloud mode).
+# GitHub schedules run on UTC and can be delayed by minutes at busy times.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    name: Process pending feedback (one pass)
+    runs-on: ubuntu-latest
+    env:
+      CLOUD: "1"
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+    steps:
+      - name: Checkout GMP
+        uses: actions/checkout@v4
+
+      # TODO owner: sync cloud_editor/ into this repo (from octogram-arcade) once v2 lands
+      - name: Process pending feedback, then exit
+        run: python3 cloud_editor/cloud_editor.py --once

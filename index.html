@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The Game Making Pipeline — get your own word games and improve them by chatting with a Telegram bot. No backend, no install.">
+<meta name="theme-color" content="#0f1f3a">
+<meta name="color-scheme" content="light">
+<title>GAME MAKING PIPELINE — your games, made and improved while you watch</title>
+<style>
+  /* ================= tokens ================= */
+  :root {
+    --navy: #0f1f3a;
+    --navy-2: #12244a;
+    --navy-3: #0c1a34;
+    --edge: #6f8cc7;
+    --edge-dim: #3a5488;
+    --gold: #e6a823;
+    --gold-hi: #f9cf6b;
+    --gold-lo: #b97e08;
+    --gold-ink: #241603;
+    --text: #e8effc;
+    --muted: #9db1d8;
+    --card-hi: #16305d;
+    --card-lo: #101f3f;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", Frutiger, system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #16233f;
+    background-color: #cfdbe6;
+    background-image: radial-gradient(circle at 50% -8%, #e8eef3 0%, #dde6ee 45%, #cfdbe6 100%);
+    background-attachment: fixed;
+  }
+  /* faint 2000s diagonal sheen over the backdrop */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 2px, rgba(255,255,255,0) 2px 9px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  ::selection { background: var(--gold-hi); color: var(--gold-ink); }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 18px 14px 40px;
+  }
+
+  /* ================= hero ================= */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    padding: 30px 22px 26px;
+    text-align: center;
+    color: #fff;
+    border: 2px solid var(--edge);
+    background: linear-gradient(180deg, #4b86f0 0%, #2a5fd6 34%, #1c43ae 68%, #16337f 100%);
+    box-shadow:
+      0 0 0 3px var(--navy),
+      inset 0 2px 0 rgba(255,255,255,.45),
+      inset 0 -14px 24px rgba(6,14,36,.5),
+      0 16px 34px rgba(15,31,58,.3);
+  }
+  .hero > * { position: relative; z-index: 1; }
+  .hero::after {
+    content: "";
+    position: absolute;
+    left: 3px; right: 3px; top: 3px;
+    height: 46%;
+    border-radius: 21px 21px 46% 46% / 21px 21px 30px 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.06) 60%, rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-size: clamp(1.65rem, 6.6vw, 2.85rem);
+    line-height: 1.04;
+    font-weight: 800;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 0 #0d1c3d, 0 5px 3px rgba(8,18,44,.4), 0 12px 24px rgba(8,18,44,.35);
+  }
+  .tagline {
+    margin: 0 auto;
+    max-width: 30em;
+    font-size: clamp(.92rem, 3.6vw, 1.08rem);
+    letter-spacing: .05em;
+    color: #eaf2ff;
+    text-shadow: 0 2px 3px rgba(8,18,44,.55);
+  }
+
+  /* ================= panels ================= */
+  .panel {
+    margin-top: 18px;
+    padding: 20px 18px;
+    border: 2px solid var(--edge);
+    border-radius: 18px;
+    color: var(--text);
+    background: linear-gradient(180deg, var(--navy-2) 0%, var(--navy) 42%, var(--navy-3) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 12px 26px rgba(15,31,58,.22);
+  }
+  .panel h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: .17em;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 2px 0 #071228, 0 3px 8px rgba(7,18,40,.6);
+  }
+  .panel h2::before {
+    content: "";
+    flex: none;
+    width: 11px; height: 11px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    box-shadow: 0 0 0 1px #8a5f0b, inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  .panel h2::after {
+    content: "";
+    flex: 1;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, rgba(111,140,199,.85), rgba(111,140,199,0));
+  }
+  .lede { margin: 6px 0 14px; color: var(--muted); letter-spacing: .02em; }
+  .fineprint { font-size: .8rem; color: var(--muted); letter-spacing: .02em; }
+  .warn { margin: 8px 0 0; color: #ffd27a; font-size: .86rem; letter-spacing: .03em; }
+
+  /* ================= buttons / links ================= */
+  .btn {
+    display: inline-block;
+    font: inherit;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
+    color: var(--gold-ink);
+    border: 2px solid #7a5410;
+    border-radius: 14px;
+    padding: .8em 1.2em;
+    cursor: pointer;
+    background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 48%, #cf8f10 100%);
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,.55),
+      inset 0 -3px 6px rgba(120,74,4,.35),
+      0 4px 0 #8a5f0b,
+      0 9px 18px rgba(15,31,58,.35);
+    transition: transform .08s ease, box-shadow .08s ease;
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn:active {
+    transform: translateY(3px);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.45), 0 1px 0 #8a5f0b;
+  }
+  .btn-block { display: block; width: 100%; }
+  .btn-mini {
+    border-radius: 10px;
+    padding: .45em .95em;
+    font-size: .74rem;
+    letter-spacing: .12em;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #8a5f0b;
+  }
+  .btn-play {
+    border-radius: 11px;
+    padding: .55em 1em;
+    font-size: .8rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #8a5f0b, 0 6px 12px rgba(15,31,58,.3);
+  }
+  .btn:focus-visible, .link:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  input:focus-visible, textarea:focus-visible, .tpl input[type="radio"]:focus-visible { outline: 3px solid var(--gold); outline-offset: 1px; }
+
+  .link {
+    color: #ffd98a;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(255,217,138,.7);
+  }
+  .link:hover { color: #fff; }
+  .quiet-link { color: var(--muted); font-size: .8rem; letter-spacing: .06em; }
+  .quiet-link:hover { color: #fff; }
+
+  /* ================= login ================= */
+  .tg-slot { display: flex; justify-content: center; margin: 16px 0 6px; min-height: 40px; }
+  .greeting {
+    margin: 6px 0 2px;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    color: #fff;
+    text-shadow: 0 2px 0 #071228, 0 4px 10px rgba(7,18,40,.55);
+  }
+
+  /* ================= new game ================= */
+  .tpl-grid { display: grid; gap: 12px; margin: 0 0 16px; }
+  .tpl {
+    padding: 12px;
+    border: 2px solid var(--edge-dim);
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--card-hi), var(--card-lo));
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .tpl:hover { border-color: var(--edge); }
+  .tpl.selected {
+    border-color: var(--gold);
+    background: linear-gradient(180deg, #1b3870, #122447);
+    box-shadow: 0 0 0 2px rgba(230,168,35,.32), inset 0 0 20px rgba(230,168,35,.12);
+  }
+  .tpl-bar { display: flex; align-items: center; gap: 10px; }
+  .tpl-bar input[type="radio"] {
+    flex: none;
+    width: 18px; height: 18px;
+    margin: 0;
+    accent-color: var(--gold);
+    cursor: pointer;
+  }
+  .tpl-glyph { flex: none; display: inline-flex; }
+  .tpl h3 {
+    margin: 0;
+    font-size: .95rem;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 2px 0 #071228;
+  }
+  .tpl h3 label { cursor: pointer; }
+  .tpl p { margin: 6px 0 0 28px; color: var(--muted); font-size: .87rem; line-height: 1.45; }
+
+  .field { margin: 0 0 14px; }
+  .field label, .field-label {
+    display: block;
+    margin: 0 0 6px;
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  input[type="text"], textarea {
+    width: 100%;
+    padding: .75em .9em;
+    font: inherit;
+    color: #eaf1ff;
+    background: #0b1830;
+    border: 2px solid var(--edge);
+    border-radius: 12px;
+  }
+  textarea { resize: vertical; min-height: 96px; }
+  input::placeholder, textarea::placeholder { color: #6d81a8; }
+
+  /* command fallback boxes (copy snippets) */
+  .fallback-box {
+    margin-top: 12px;
+    padding: 12px;
+    border: 2px dashed rgba(111,140,199,.7);
+    border-radius: 12px;
+    background: rgba(8,17,36,.6);
+  }
+  .fallback-box p { margin: 0; color: var(--muted); font-size: .82rem; letter-spacing: .03em; }
+  .fallback-box code {
+    display: block;
+    margin: 8px 0 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #071228;
+    color: #ffe6a8;
+    font-family: ui-monospace, Consolas, "Courier New", monospace;
+    font-size: .84rem;
+    word-break: break-all;
+  }
+
+  /* ================= my games ================= */
+  .game-grid { display: grid; gap: 12px; margin-top: 12px; }
+  .game-card {
+    padding: 12px;
+    border: 2px solid var(--edge-dim);
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--card-hi), var(--card-lo));
+  }
+  .game-card.yours { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(230,168,35,.22); }
+  .game-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .game-head h3 {
+    margin: 0;
+    font-size: .95rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 2px 0 #071228;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .badge {
+    flex: none;
+    padding: 3px 9px;
+    border: 1px solid #8a5f0b;
+    border-radius: 999px;
+    font-size: .6rem;
+    font-weight: 800;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--gold-ink);
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  .game-meta { margin: 4px 0 10px; color: var(--muted); font-size: .78rem; letter-spacing: .03em; }
+  .game-actions { display: flex; align-items: center; gap: 14px; }
+  .empty {
+    margin-top: 12px;
+    padding: 18px;
+    border: 2px dashed rgba(111,140,199,.55);
+    border-radius: 14px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .more-note { margin: 10px 0 0; text-align: center; color: var(--muted); font-size: .82rem; letter-spacing: .04em; }
+
+  /* ================= footer ================= */
+  footer {
+    margin: 26px 4px 8px;
+    text-align: center;
+    color: #4a5f83;
+    font-size: .8rem;
+    letter-spacing: .05em;
+    line-height: 1.6;
+  }
+
+  /* ================= larger screens (phone-first) ================= */
+  @media (min-width: 480px) {
+    .wrap { padding: 28px 18px 48px; }
+    .panel { padding: 22px 20px; }
+    .hero { padding: 36px 26px 30px; }
+  }
+  @media (min-width: 1400px) {
+    .wrap { padding-top: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 1. HEADER ============ -->
+  <header class="hero">
+    <h1>Game Making Pipeline</h1>
+    <p class="tagline">your games, made and improved while you watch</p>
+  </header>
+
+  <!-- ============ 2. LOGIN ============ -->
+  <section class="panel" id="login" aria-labelledby="login-h">
+    <h2 id="login-h">Login</h2>
+
+    <div id="login-logged-out">
+      <p class="lede">Log in with Telegram so the Pipeline knows which games are yours. Every real action travels through the bot — no server, no passwords here.</p>
+      <!-- The official widget is injected by JS so BOT_USERNAME stays the single source.
+           If it can't load (blocked / offline / unauthorized domain), the fallback appears. -->
+      <div id="tg-widget-slot" class="tg-slot" aria-label="Telegram login widget"></div>
+      <div id="tg-fallback" hidden aria-live="polite">
+        <a id="tg-fallback-link" class="btn btn-block" href="#" target="_blank" rel="noopener">Open the bot in Telegram</a>
+        <p class="fineprint">Widget blocked? That link opens the bot directly — send <code>start</code> and you're in.</p>
+      </div>
+    </div>
+
+    <div id="login-logged-in" hidden aria-live="polite">
+      <p class="greeting">Ahoy, <span id="greeting-name"></span> 👋</p>
+      <p class="fineprint" id="greeting-handle" hidden></p>
+      <p><a href="#" id="logout" class="quiet-link">log out</a></p>
+    </div>
+  </section>
+
+  <!-- ============ 3. NEW GAME ============ -->
+  <section class="panel" id="new-game" aria-labelledby="newgame-h">
+    <h2 id="newgame-h">New Game</h2>
+    <p class="lede">Pick a template, name it, and the bot starts building your work-order.</p>
+
+    <div class="tpl-grid">
+      <article class="tpl" data-template="word-arcade">
+        <div class="tpl-bar">
+          <input type="radio" name="template" id="tpl-word-arcade" value="word-arcade" checked>
+          <span class="tpl-glyph" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="#ffd98a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <rect x="5" y="22" width="22" height="7" rx="3"></rect>
+              <path d="M16 22V12"></path>
+              <circle cx="16" cy="8" r="4"></circle>
+              <path d="M9 26h5"></path>
+            </svg>
+          </span>
+          <h3><label for="tpl-word-arcade">Word Arcade</label></h3>
+        </div>
+        <p>Three word games in one cabinet.</p>
+        <p>Quick rounds, high scores, zero setup.</p>
+      </article>
+
+      <article class="tpl" data-template="word-campaign">
+        <div class="tpl-bar">
+          <input type="radio" name="template" id="tpl-word-campaign" value="word-campaign">
+          <span class="tpl-glyph" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="#ffd98a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <path d="M16 3l10 4v8c0 7-4.5 11.5-10 14C10.5 26.5 6 22 6 15V7z"></path>
+              <path d="M16 10v10"></path>
+            </svg>
+          </span>
+          <h3><label for="tpl-word-campaign">Word Campaign</label></h3>
+        </div>
+        <p>Battles, shop, zones.</p>
+        <p>Earn coins, buy letters, push the frontier.</p>
+      </article>
+
+      <article class="tpl" data-template="eight-letters">
+        <div class="tpl-bar">
+          <input type="radio" name="template" id="tpl-eight-letters" value="eight-letters">
+          <span class="tpl-glyph" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="#ffd98a" stroke-width="2" stroke-linejoin="round" focusable="false">
+              <rect x="4" y="4" width="11" height="11" rx="3"></rect>
+              <rect x="17" y="4" width="11" height="11" rx="3"></rect>
+              <rect x="4" y="17" width="11" height="11" rx="3"></rect>
+              <rect x="17" y="17" width="11" height="11" rx="3"></rect>
+              <text x="9.5" y="13" font-size="8" font-weight="bold" text-anchor="middle" fill="#ffd98a" stroke="none">E</text>
+              <text x="22.5" y="13" font-size="8" font-weight="bold" text-anchor="middle" fill="#ffd98a" stroke="none">I</text>
+              <text x="9.5" y="26" font-size="8" font-weight="bold" text-anchor="middle" fill="#ffd98a" stroke="none">G</text>
+              <text x="22.5" y="26" font-size="8" font-weight="bold" text-anchor="middle" fill="#ffd98a" stroke="none">H</text>
+            </svg>
+          </span>
+          <h3><label for="tpl-eight-letters">Eight Letters</label></h3>
+        </div>
+        <p>The anagram classic.</p>
+        <p>One scramble, every word you can find, beat the clock.</p>
+      </article>
+    </div>
+
+    <div class="field">
+      <label for="game-title">Game title</label>
+      <input type="text" id="game-title" maxlength="48" autocomplete="off" spellcheck="false" placeholder="e.g. Midnight Anagrams">
+    </div>
+    <p class="warn" id="create-hint" hidden>Please give your game a title first.</p>
+    <button type="button" class="btn btn-block" id="create-btn">Create My Game</button>
+    <div class="fallback-box" id="create-fallback" hidden aria-live="polite">
+      <p>If Telegram didn't open, send this to the bot:</p>
+      <code id="create-snippet"></code>
+      <button type="button" class="btn btn-mini" id="create-copy">Copy</button>
+    </div>
+  </section>
+
+  <!-- ============ 4. MY GAMES ============ -->
+  <section class="panel" id="my-games" aria-labelledby="mygames-h">
+    <h2 id="mygames-h">My Games</h2>
+    <p class="lede">Live builds from the Pipeline. Yours are pinned to the top.</p>
+    <div id="games-list" class="game-grid" aria-live="polite">
+      <p class="empty">Loading games…</p>
+    </div>
+  </section>
+
+  <!-- ============ 5. FEEDBACK PORTAL ============ -->
+  <section class="panel" id="feedback" aria-labelledby="feedback-h">
+    <h2 id="feedback-h">Feedback Portal</h2>
+    <p class="lede">Tell the Pipeline what to build, fix, or buff.</p>
+    <div class="field">
+      <label class="field-label" for="feedback-text">Your message</label>
+      <textarea id="feedback-text" rows="4" maxlength="240" placeholder="e.g. Eight Letters needs a daily puzzle"></textarea>
+    </div>
+    <p class="warn" id="feedback-hint" hidden>Write a short note first.</p>
+    <button type="button" class="btn btn-block" id="feedback-send">Send to the Pipeline</button>
+    <div class="fallback-box" id="feedback-fallback" hidden aria-live="polite">
+      <p>If Telegram didn't open, send this to the bot:</p>
+      <code id="feedback-snippet"></code>
+      <button type="button" class="btn btn-mini" id="feedback-copy">Copy</button>
+    </div>
+    <p class="fineprint">Messages go to the makers' Telegram and the AI review pipeline.</p>
+  </section>
+
+  <!-- ============ 6. FOOTER ============ -->
+  <footer>
+    Powered by glm-5.3 · Flux · Godot · GitHub Actions · Telegram — the Game Making Pipeline
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+   * BOT_USERNAME — SINGLE SOURCE OF TRUTH for the pipeline bot's handle.
+   * Change this one line when the real username lands. It drives:
+   *   1. the Telegram Login Widget  (data-telegram-login attribute)
+   *   2. the login fallback button  (t.me/<BOT_USERNAME>?start=login)
+   *   3. NEW-GAME work orders       (?start=newgame-<template>-<brief>)
+   *   4. the Feedback Portal        (?start=feedback-<text>)
+   * =================================================================== */
+  var BOT_USERNAME = "Slothitude_bot";
+  var BOT_URL = "https://t.me/" + BOT_USERNAME;
+
+  var USER_KEY = "gmp_user";   // localStorage slot: {id, first_name, username}
+  var TG_START_MAX = 64;       // Telegram caps the ?start= payload at 64 chars
+  var COMMUNITY_SHOW = 6;      // community games listed alongside yours
+
+  var gamesCache = [];
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function collapseWs(value) { return String(value == null ? "" : value).replace(/\s+/g, " ").trim(); }
+
+  /* ---- user store (guarded: private mode / file:// can throw) ---- */
+  function readUser() {
+    try {
+      var raw = localStorage.getItem(USER_KEY);
+      if (!raw) return null;
+      var u = JSON.parse(raw);
+      return (u && u.id != null && u.first_name) ? u : null;
+    } catch (e) { return null; }
+  }
+  function writeUser(u) {
+    try { localStorage.setItem(USER_KEY, JSON.stringify(u)); } catch (e) { /* ignore */ }
+  }
+  function clearStoredUser() {
+    try { localStorage.removeItem(USER_KEY); } catch (e) { /* ignore */ }
+  }
+
+  /* ================= 2. LOGIN ================= */
+
+  // Telegram calls this with the signed payload. A static page cannot verify
+  // the hash (that needs the bot token server-side) — the bot re-checks
+  // identity on its side when the work-order arrives.
+  window.onTelegramAuth = function (user) {
+    if (!user || user.id == null) return;
+    writeUser({
+      id: user.id,
+      first_name: user.first_name || "friend",
+      username: user.username || null
+    });
+    renderAuth();
+    if (gamesCache.length) renderGames();
+  };
+
+  function renderAuth() {
+    var user = readUser();
+    var outBox = $("login-logged-out");
+    var inBox = $("login-logged-in");
+    if (user) {
+      $("greeting-name").textContent = user.first_name;
+      var handle = $("greeting-handle");
+      handle.textContent = user.username ? "@" + user.username : "";
+      handle.hidden = !user.username;
+      inBox.hidden = false;
+      outBox.hidden = true;
+    } else {
+      inBox.hidden = true;
+      outBox.hidden = false;
+    }
+  }
+
+  function showLoginFallback() {
+    var box = $("tg-fallback");
+    if (box) box.hidden = false;
+  }
+
+  function injectTelegramWidget() {
+    var slot = $("tg-widget-slot");
+    if (!slot) return;
+    var s = document.createElement("script");
+    s.src = "https://telegram.org/js/telegram-widget.js?22";
+    s.async = true;
+    // BOT_USERNAME is the single source for the login bot handle:
+    s.setAttribute("data-telegram-login", BOT_USERNAME);
+    s.setAttribute("data-size", "large");
+    s.setAttribute("data-radius", "14");
+    s.setAttribute("data-userpic", "false");
+    s.setAttribute("data-request-access", "write");
+    s.setAttribute("data-onauth", "onTelegramAuth(user)");
+    s.onerror = showLoginFallback;               // blocked / offline / file://
+    slot.appendChild(s);
+    // If the script loads but the widget never renders, fall back too.
+    window.setTimeout(function () {
+      if (!slot.querySelector("iframe")) showLoginFallback();
+    }, 3500);
+  }
+
+  /* ================= 3. NEW GAME ================= */
+
+  function syncTemplateCards() {
+    var checked = document.querySelector('input[name="template"]:checked');
+    var val = checked ? checked.value : "";
+    Array.prototype.forEach.call(document.querySelectorAll(".tpl"), function (card) {
+      card.classList.toggle("selected", card.getAttribute("data-template") === val);
+    });
+  }
+
+  function initTemplateCards() {
+    Array.prototype.forEach.call(document.querySelectorAll(".tpl"), function (card) {
+      var radio = card.querySelector('input[name="template"]');
+      card.addEventListener("click", function () {
+        if (radio && !radio.checked) radio.checked = true;
+        syncTemplateCards();
+      });
+      if (radio) radio.addEventListener("change", syncTemplateCards);
+    });
+    syncTemplateCards();
+  }
+
+  // Titles travel inside a Telegram ?start= payload: letters, digits, _ and - only.
+  function sanitizeBrief(raw, maxLen) {
+    var t = collapseWs(raw).replace(/[^A-Za-z0-9 _\-]/g, "");
+    t = t.replace(/ /g, "_").replace(/_+/g, "_").replace(/^[_\-]+/, "");
+    if (t.length > maxLen) t = t.slice(0, maxLen);
+    return t.replace(/[_\-]+$/, "");
+  }
+
+  // URL-encode, then trim without cutting a %XX escape in half.
+  function encodedBrief(brief, budget) {
+    var enc = encodeURIComponent(brief);
+    if (enc.length > budget) {
+      enc = enc.slice(0, budget);
+      enc = enc.replace(/%[0-9A-Fa-f]{0,2}$/, function (m) { return m.length === 3 ? m : ""; });
+    }
+    return enc;
+  }
+
+  function initCreateButton() {
+    $("create-btn").addEventListener("click", function () {
+      var tpl = currentTemplate();
+      var title = collapseWs($("game-title").value);
+      var budget = TG_START_MAX - ("newgame-" + tpl + "-").length;
+      var brief = sanitizeBrief(title, budget);
+      if (!brief) {
+        $("create-hint").hidden = false;
+        $("game-title").focus();
+        return;
+      }
+      $("create-hint").hidden = true;
+      var url = BOT_URL + "?start=newgame-" + tpl + "-" + encodedBrief(brief, budget);
+      // manual fallback: /newgame <template> <title>
+      $("create-snippet").textContent = "/newgame " + tpl + " " + title;
+      $("create-fallback").hidden = false;
+      window.open(url, "_blank", "noopener"); // if blocked, the snippet is on screen
+    });
+  }
+
+  function currentTemplate() {
+    var checked = document.querySelector('input[name="template"]:checked');
+    return checked ? checked.value : "word-arcade";
+  }
+
+  /* ================= 4. MY GAMES ================= */
+
+  function safeUrl(raw) {
+    try {
+      var u = new URL(String(raw == null ? "" : raw), window.location.href);
+      return (u.protocol === "http:" || u.protocol === "https:") ? u.href : null;
+    } catch (e) { return null; }
+  }
+
+  function byUpdated(a, b) {
+    return (Date.parse(b && b.updated) || 0) - (Date.parse(a && a.updated) || 0);
+  }
+
+  function fmtDate(value) {
+    if (!value) return "";
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    try {
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch (e) { return String(value); }
+  }
+
+  function gameCardHtml(game, isYours) {
+    var title = esc(game.title || game.slug || "Untitled game");
+    var url = safeUrl(game.url);
+    var metaBits = [];
+    if (game.slug) metaBits.push(esc(game.slug));
+    var updated = fmtDate(game.updated);
+    if (updated) metaBits.push("updated " + esc(updated));
+
+    var html = '<article class="game-card' + (isYours ? " yours" : "") + '">';
+    html += '<div class="game-head"><h3>' + title + '</h3>' +
+            (isYours ? '<span class="badge">Yours</span>' : '') + '</div>';
+    if (metaBits.length) html += '<p class="game-meta">' + metaBits.join(" · ") + '</p>';
+    if (url) {
+      html += '<div class="game-actions">' +
+              '<a class="btn btn-play" href="' + esc(url) + '" target="_blank" rel="noopener">▶ Play</a>' +
+              '<a class="link" href="' + esc(url + "#feedback") + '" target="_blank" rel="noopener">Feedback</a>' +
+              '</div>';
+    } else {
+      html += '<p class="game-meta">link unavailable</p>';
+    }
+    return html + '</article>';
+  }
+
+  function renderGames() {
+    var user = readUser();
+    var uid = user ? String(user.id) : null;
+    var yours = [];
+    var community = [];
+    gamesCache.forEach(function (g) {
+      if (!g) return;
+      if (uid !== null && String(g.owner_id) === uid) yours.push(g);
+      else community.push(g);
+    });
+    yours.sort(byUpdated);
+    community.sort(byUpdated);
+
+    var shownCommunity = community.slice(0, COMMUNITY_SHOW);
+    var html = "";
+    yours.concat(shownCommunity).forEach(function (g) {
+      html += gameCardHtml(g, uid !== null && String(g.owner_id) === uid);
+    });
+    var hiddenCount = community.length - shownCommunity.length;
+    if (hiddenCount > 0) html += '<p class="more-note">+' + hiddenCount + ' more in the community</p>';
+    $("games-list").innerHTML = html;
+  }
+
+  function renderEmptyGames() {
+    $("games-list").innerHTML = '<p class="empty">No games yet — be the first! Create one above.</p>';
+  }
+
+  function loadGames() {
+    if (!window.fetch) { renderEmptyGames(); return; }
+    fetch("games/index.json", { cache: "no-store" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!Array.isArray(data) || data.length === 0) { renderEmptyGames(); return; }
+        gamesCache = data;
+        renderGames();
+      })
+      .catch(function () { renderEmptyGames(); }); // 404 / offline / bad JSON → empty state
+  }
+
+  /* ================= 5. FEEDBACK PORTAL ================= */
+
+  function initFeedbackButton() {
+    $("feedback-send").addEventListener("click", function () {
+      var text = collapseWs($("feedback-text").value);
+      var budget = TG_START_MAX - "feedback-".length;
+      var brief = sanitizeBrief(text, budget);
+      if (!brief) {
+        $("feedback-hint").hidden = false;
+        $("feedback-text").focus();
+        return;
+      }
+      $("feedback-hint").hidden = true;
+      var url = BOT_URL + "?start=feedback-" + encodedBrief(brief, budget);
+      // manual fallback: /feedback <text> (typed equivalent of the feedback- deep link)
+      $("feedback-snippet").textContent = "/feedback " + text;
+      $("feedback-fallback").hidden = false;
+      window.open(url, "_blank", "noopener");
+    });
+  }
+
+  /* ================= clipboard (secure-API first, legacy fallback) ================= */
+
+  function wireCopy(buttonId, getText) {
+    var btn = $(buttonId);
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      copyText(getText(), btn);
+    });
+  }
+
+  function copyText(text, btn) {
+    var original = btn.textContent;
+    function report(ok) {
+      btn.textContent = ok ? "Copied!" : "Copy failed — select it manually";
+      btn.disabled = true;
+      window.setTimeout(function () {
+        btn.textContent = original;
+        btn.disabled = false;
+      }, 1800);
+    }
+    function legacy() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      report(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(report.bind(null, true), legacy);
+    } else {
+      legacy();
+    }
+  }
+
+  /* ================= init ================= */
+
+  renderAuth();
+  $("logout").addEventListener("click", function (e) {
+    e.preventDefault();
+    clearStoredUser();
+    renderAuth();
+    if (gamesCache.length) renderGames(); // drop the YOURS badges + re-rank
+  });
+  initTemplateCards();
+  injectTelegramWidget();
+  $("tg-fallback-link").href = BOT_URL + "?start=login";
+  initCreateButton();
+  initFeedbackButton();
+  wireCopy("create-copy", function () { return $("create-snippet").textContent; });
+  wireCopy("feedback-copy", function () { return $("feedback-snippet").textContent; });
+  loadGames();
+})();
+</script>
+</body>
+</html>

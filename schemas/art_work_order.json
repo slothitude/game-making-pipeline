@@ -1,0 +1,12 @@
+{
+  "id": "wo-art-20260922-0003",
+  "game": "octogram-arcade",
+  "asset_id": "logo",
+  "prompt": "flat vector arcade logo, an octagon built from 8 letter tiles, thick ink outline, single accent color",
+  "style": "flat-vector",
+  "acceptance": {
+    "opaque_min": 0.92,
+    "opaque_max": 1.0,
+    "mean_color_hint": "#1d3557"
+  }
+}
