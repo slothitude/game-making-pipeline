@@ -28,6 +28,6 @@ jobs:
       - name: Checkout GMP
         uses: actions/checkout@v4
 
-      # TODO owner: sync cloud_editor/ into this repo (from octogram-arcade) once v2 lands
+     
       - name: Process pending feedback, then exit
         run: python3 cloud_editor/cloud_editor.py --once
