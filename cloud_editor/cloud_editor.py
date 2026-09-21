@@ -1,9 +1,11 @@
 """cloud_editor — the feedback→implement→deploy agent harness for Octogram Arcade.
 
-v3: the interactive Telegram experience — inline keyboards + callback queries,
-a per-chat session FSM, deploy confirmation buttons, and file uploads.
-All v2 behavior is preserved (commands, deep links, the gate wall, Actions mode,
-the v2 selftest cases).
+v4: the two-tier LLM company — glm-5.3 is the BOSS (triage -> plan JSON ->
+review; the reviewer owns the last word) and openrouter/free workers draft the
+code/data subtasks. All v3 behavior is preserved (inline keyboards + callback
+queries, the per-chat session FSM, deploy confirmation buttons, file uploads,
+and all v2 behavior: commands, deep links, the gate wall, Actions mode, the
+selftest cases). A worker failure degrades silently to boss-only.
 
 Loop (run on Rog with no flags, or as a scheduled GitHub Actions job with --once):
   1. Poll Telegram getUpdates. Updates route by shape:
@@ -22,8 +24,12 @@ Loop (run on Rog with no flags, or as a scheduled GitHub Actions job with --once
        message (photo/voice/audio/.zip)  -> uploads/<chat_id>/<md5>.<ext>; a photo
          inside a newgame session becomes the game logo, anything else attaches to
          the next feedback from that chat; voice also queues a transcription order.
-  2. For feedback: ask glm-5.3 (NVIDIA free endpoint, OpenAI-compatible) to triage and
-     produce a unified diff implementing the change in the arcade repo.
+  2. For feedback: glm-5.3 (NVIDIA free endpoint, OpenAI-compatible) triages the
+     tier and emits a plan JSON ({reply, subtasks}); openrouter/free workers draft
+     one diff per code/data subtask; the boss reviews and either APPROVES the
+     merged drafts or outputs its own corrected diff — the diff that ships is
+     always the boss's. No parseable plan, or the worker endpoint is dead (401/
+     429/timeout)? The boss does it all itself (silent v3 single-shot fallback).
   3. Apply the patch on a per-order scratch branch (cloud_editor/scratch-<order>);
      run THE GATE WALL (Godot headless suites).
        T1/T2 diffs (art, data/numbers) still auto-deploy exactly like v2.
@@ -38,8 +44,9 @@ Multi-tenant: every message's from.id is recorded with the feedback/order it pro
 replies go to the SAME chat the message came from, and are mirrored to the owner's
 review channel (config chat_id) with a "[player <id> <name>]" prefix.
 
-Config: env TG_TOKEN / NVAPI_KEY / CHAT_ID win, else cloud_editor/config.json
-        {bot_token, chat_id, nvapi_key, repo_dir} (local default).
+Config: env TG_TOKEN / NVAPI_KEY / OPENROUTER_KEY / CHAT_ID win, else
+        cloud_editor/config.json
+        {bot_token, chat_id, nvapi_key, openrouter_key, repo_dir} (local default).
 State:  cloud_editor/state.json {last_update_id, deployed_count, last_action}
 Queue:  cloud_editor/feedback/*.json (audit trail of every request)
 Orders: cloud_editor/orders/*.json  (new-game + voice transcription work orders)
@@ -60,18 +67,23 @@ import urllib.parse
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+RUNTIME = os.environ.get("RUNTIME_DIR") or HERE
 CONFIG_PATH = os.path.join(HERE, "config.json")
-STATE_PATH = os.path.join(HERE, "state.json")
-FEEDBACK_DIR = os.path.join(HERE, "feedback")
-ORDERS_DIR = os.path.join(HERE, "orders")
-SESSIONS_DIR = os.path.join(HERE, "sessions")
+STATE_PATH = os.path.join(RUNTIME, "state.json")
+FEEDBACK_DIR = os.path.join(RUNTIME, "feedback")
+ORDERS_DIR = os.path.join(RUNTIME, "orders")
+SESSIONS_DIR = os.path.join(RUNTIME, "sessions")
 UPLOADS_DIR = os.path.join(HERE, "uploads")
 PAUSED_PATH = os.path.join(HERE, "paused.flag")
 HUB_INDEX = os.path.join(HERE, "..", "hub", "games", "index.json")
 REPO_DEFAULT = r"C:\Users\aaron\octogram-arcade"
-GODOT = r"C:\Users\aaron\AppData\Local\Godot\Godot_v4.7.1-stable_win64.exe"
+GODOT = os.environ.get("GODOT_BIN") or r"C:\Users\aaron\AppData\Local\Godot\Godot_v4.7.1-stable_win64.exe"
 LLM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-LLM_MODEL = "z-ai/glm-5.3"
+LLM_MODEL = "z-ai/glm-5.3"          # BOSS tier: triage, review, last word
+WORKER_URL = "https://openrouter.ai/api/v1/chat-completions"
+WORKER_MODEL = "openrouter/free"    # WORKER tier: drafts code/data subtasks
+PLAN_KINDS = ("code", "art", "data")  # subtask whitelist (art stays with the boss)
+MAX_SUBTASKS = 3                    # a plan carries 0-3 subtasks
 GATE_SUITES = ["run_tests", "run_rpg_tests", "smoke_battle", "smoke_menu",
                "run_e2e", "run8_tests", "run8_e2e"]
 MAX_ATTEMPTS = 3
@@ -108,6 +120,45 @@ SYSTEM_PROMPT = (
     "The player may own their own generated game under games/<id>-<slug>/ in the hub "
     "repo — for feedback tagged with an owner game, restrict edits to that game's "
     "directory; for pipeline-owned games (octogram arcade family) edit as before."
+)
+
+# v4 two-tier crew: the boss triages before anyone writes a diff. Appended to
+# SYSTEM_PROMPT for the triage pass (and kept for the whole boss thread).
+TRIAGE_ADDENDUM = (
+    "\n\nTWO-TIER CREW: you are the BOSS — openrouter/free workers draft code for "
+    "you and you review it; you own the last word. First classify the tier: "
+    "T0 = question/opinion, T1 = art, T2 = data/numbers, T3 = code. For T0 just "
+    "reply conversationally — no JSON, no diff. For T1/T2/T3 do NOT write the "
+    "diff yourself yet: output one short line naming the tier, then ONE fenced "
+    "json block shaped exactly like "
+    '{"reply": "<short message for the player>", "subtasks": [{"id": 1, '
+    '"kind": "code", "instruction": "<exact, self-contained change spec>", '
+    '"files_hint": ["scripts/game_manager.gd"]}]} '
+    "with 0-3 subtasks (kind is code|art|data). code/data subtasks go to the "
+    "workers; kind \"art\" subtasks stay yours — express them as diffs too "
+    "(theme/.tres/.tscn edits), nobody here can paint pixels."
+)
+
+# v4: the worker tier drafts one subtask at a time. Plain OpenAI-compatible call.
+WORKER_PROMPT = (
+    "You are a worker coder on the cloud_editor crew for Octogram Arcade — a "
+    "Godot 4.7 GDScript word-game trilogy (Word Poker arena, an RPG campaign, "
+    "Eight Letters) in one app. Implement the assigned subtask MINIMALLY and "
+    "safely as ONE unified diff (git apply format, paths relative to the repo "
+    "root): match the codebase's GDScript 4 style, tabs, constants-not-magic-"
+    "numbers. Never output partial files, only diffs. Output ONLY one fenced "
+    "```diff block."
+)
+
+PLAN_NUDGE = (
+    "That had no usable plan JSON. Either answer conversationally with no diff, "
+    "or output your short reply plus ONE fenced ```diff block (git apply format) "
+    "implementing the change."
+)
+
+REVIEW_NUDGE = (
+    "Output APPROVED plus one fenced ```diff block, or your own corrected full "
+    "fenced ```diff block. Nothing else."
 )
 
 MENU_TEXT = (
@@ -149,7 +200,12 @@ def load_config():
     cfg["bot_token"] = os.environ.get("TG_TOKEN") or cfg.get("bot_token", "")
     cfg["nvapi_key"] = os.environ.get("NVAPI_KEY") or cfg.get("nvapi_key", "")
     cfg["chat_id"] = os.environ.get("CHAT_ID") or cfg.get("chat_id", "")
-    cfg["repo_dir"] = os.environ.get("REPO_DIR") or cfg.get("repo_dir", "")
+    # v4 worker tier. config.json.example note: add
+    #   "openrouter_key": "<your OpenRouter key>"
+    # (env OPENROUTER_KEY wins). No key -> boss-only: every subtask is drafted by
+    # glm-5.3 itself, silently.
+    cfg["openrouter_key"] = (os.environ.get("OPENROUTER_KEY")
+                             or cfg.get("openrouter_key", ""))
     return cfg
 
 
@@ -479,6 +535,7 @@ def dir_count(path, suffix=".json"):
 def status_report(state):
     paused = "yes" if os.path.exists(PAUSED_PATH) else "no"
     return ("📊 cloud_editor status\n"
+            "brain: glm-5.3 boss + openrouter/free workers\n"
             f"feedback in queue: {dir_count(FEEDBACK_DIR)}\n"
             f"game orders in queue: {dir_count(ORDERS_DIR)}\n"
             f"deploys shipped: {state.get('deployed_count', 0)}\n"
@@ -577,10 +634,11 @@ def deploy_buttons(order_id):
 
 # -------------------------------------------------------------- feedback LLM ---
 
-def llm(cfg, messages):
-    """glm-5.3 on the free tier: a reasoning model that can take minutes and may
-    return content=null with only reasoning_content. Big budget, long timeout,
-    and a final-answer nudge when the content comes back empty."""
+def llm_boss(cfg, messages):
+    """BOSS tier — glm-5.3 on the NVIDIA free tier: a reasoning model that can
+    take minutes and may return content=null with only reasoning_content. Big
+    budget, long timeout, and a final-answer nudge when the content comes back
+    empty. Triages, reviews the worker drafts, owns the last word."""
     for nudge in range(2):
         data = api_post(LLM_URL, {
             "model": LLM_MODEL,
@@ -602,6 +660,190 @@ def llm(cfg, messages):
              "```diff block). No further reasoning."},
         ]
     return ""
+
+
+# ------------------------------------------------------------- two-tier crew ---
+# BOSS (llm_boss, glm-5.3) triages and reviews; WORKERS (llm_worker,
+# openrouter/free) draft the code/data subtasks; the boss's review output is the
+# diff that ships. A worker failure (401/429/timeout/no key) degrades silently:
+# the boss drafts the subtask itself, and only the feedback entry meta records it.
+
+def llm_worker(cfg, messages):
+    """WORKER tier — openrouter/free via the OpenAI-compatible endpoint. Plain
+    call: no chat_template_kwargs, no reasoning nudge. Returns "" on ANY failure
+    (missing key, 401/429, timeout, malformed body); the caller treats that as
+    'the boss drafts this subtask itself'."""
+    if not cfg.get("openrouter_key"):
+        return ""
+    try:
+        data = api_post(WORKER_URL, {
+            "model": WORKER_MODEL,
+            "messages": messages,
+            "temperature": 0.4,
+            "max_tokens": 4096,
+        }, token=cfg["openrouter_key"], timeout=240)
+        choice = (data.get("choices") or [{}])[0]
+        return (choice.get("message") or {}).get("content") or ""
+    except Exception as exc:  # noqa: BLE001 — any worker failure degrades to boss
+        print("worker error:", exc, flush=True)
+        return ""
+
+
+def json_block_end(text, start):
+    """Index just past the '}' matching the '{' at text[start], respecting
+    strings and escapes; None when unbalanced (tolerant extractor plumbing)."""
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return None
+
+
+def extract_plan(reply):
+    """First {...} JSON object in the boss's triage reply -> dict, or None. A
+    fenced ```json block wins; else the first brace-balanced {...} anywhere in
+    the text (so nested braces and braces inside strings survive)."""
+    text = reply or ""
+    candidates = []
+    fence = re.search(r"```(?:json)?\s*(\{.*)", text, re.DOTALL)
+    if fence:
+        candidates.append(fence.group(1))
+    start = text.find("{")
+    if start != -1:
+        end = json_block_end(text, start)
+        if end is not None:
+            candidates.append(text[start:end])
+    for cand in candidates:
+        # Trim to the balanced block: a fenced grab may carry trailing prose.
+        end = json_block_end(cand, 0)
+        if end is None:
+            continue
+        try:
+            plan = json.loads(cand[:end])
+        except ValueError:
+            continue
+        if isinstance(plan, dict):
+            return plan
+    return None
+
+
+def validate_plan(plan):
+    """Triage dict -> (reply, subtasks), or None when unusable. Subtasks are
+    dropped unless kind is code|art|data with a non-empty instruction, capped
+    at MAX_SUBTASKS, re-id'd 1..n; files_hint is coerced to a list of str."""
+    if not isinstance(plan, dict):
+        return None
+    reply = plan.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        return None
+    raw = plan.get("subtasks")
+    if not isinstance(raw, list):
+        raw = []
+    subtasks = []
+    for st in raw[:MAX_SUBTASKS]:
+        if not isinstance(st, dict):
+            continue
+        kind = str(st.get("kind") or "").strip().lower()
+        instruction = st.get("instruction")
+        if kind not in PLAN_KINDS or not isinstance(instruction, str) \
+                or not instruction.strip():
+            continue
+        hint = st.get("files_hint")
+        if not isinstance(hint, list):
+            hint = []
+        subtasks.append({"id": len(subtasks) + 1, "kind": kind,
+                         "instruction": instruction.strip(),
+                         "files_hint": [str(f) for f in hint if f]})
+    return reply.strip(), subtasks
+
+
+def plan_tier(subtasks):
+    """Pure: subtasks -> the tier the plan implies (T0 = none, any code file
+    makes it T3, else data -> T2, else art -> T1)."""
+    kinds = {st.get("kind") for st in subtasks}
+    if not kinds:
+        return "T0"
+    if "code" in kinds:
+        return "T3"
+    if "data" in kinds:
+        return "T2"
+    return "T1"
+
+
+def needs_boss_draft(draft):
+    """The cost-guard decision: a blank/error worker reply (llm_worker returns ""
+    on 401/429/timeout/no key) means the boss does the subtask itself. Silent to
+    the player; the feedback entry meta carries the bookkeeping."""
+    return not (draft or "").strip()
+
+
+def merge_drafts(drafts):
+    """Pure: worker drafts -> one combined patch for the boss to review."""
+    return "\n".join(d.strip() for d in drafts if d and d.strip()).strip()
+
+
+def review_decision(review_reply, merged_drafts):
+    """Pure: boss review output + merged worker drafts -> the diff that proceeds.
+    The reviewer owns the last word: its own diff wins; APPROVED without a diff
+    ships the drafts as-is; anything else -> None (retry, then boss-only)."""
+    diff = extract_diff(review_reply or "")
+    if diff is not None and diff.strip():
+        return diff.strip()  # the fence capture keeps a trailing newline
+    if "APPROVED" in (review_reply or ""):
+        return (merged_drafts or "").strip() or None
+    return None
+
+
+def worker_draft(cfg, subtask, facts):
+    """One worker pass: a fenced diff for this subtask, or None when the worker
+    flaked (then the boss drafts it — the silent single-tier fallback)."""
+    hint = ", ".join(subtask.get("files_hint") or []) or "(no paths suggested)"
+    reply = llm_worker(cfg, [
+        {"role": "system", "content": WORKER_PROMPT},
+        {"role": "user", "content":
+            f"{facts}\n\nSubtask {subtask.get('id')}: {subtask.get('instruction')}\n"
+            f"Likely files: {hint}\n"
+            "Output ONE fenced ```diff block (git apply format, paths relative to "
+            "the repo root) and nothing else."},
+    ])
+    if needs_boss_draft(reply):
+        return None
+    return extract_diff(reply)
+
+
+def review_brief(subtasks, drafts, plan_reply):
+    """The boss review prompt: every subtask with its worker draft (or a 'do it
+    yourself' for art / flaked workers), and what APPROVE vs revise means."""
+    lines = [f"Your plan told the player: {plan_reply!r}", "Worker drafts:"]
+    for st, draft in zip(subtasks, drafts):
+        if draft:
+            lines.append(f"--- subtask {st['id']} ({st['kind']}) ---\n"
+                         f"```diff\n{draft}\n```")
+        else:
+            lines.append(f"--- subtask {st['id']} ({st['kind']}) --- no worker "
+                         "draft; implement it yourself.")
+    lines.append("Review as the boss: if the drafts are correct and complete, "
+                 "output APPROVED plus (optionally) one merged/cleaned ```diff "
+                 "block; if not, output your own corrected FULL ```diff block "
+                 "covering every subtask. Your diff is what ships.")
+    return "\n".join(lines)
 
 
 def run_gates(repo):
@@ -653,24 +895,35 @@ def diff_tier(diff):
 
 
 def deploy_web(repo):
-    r = subprocess.run([GODOT, "--headless", "--path", repo, "--export-release", "Web"],
+    """Export Web and push ONLY the web files to the game's deploy branch
+    (Pages serves it; main holds source — never clobber source with assets)."""
+    godot = os.environ.get("GODOT_BIN") or GODOT
+    r = subprocess.run([godot, "--headless", "--path", repo, "--export-release", "Web"],
                        capture_output=True, text=True, timeout=600)
     if r.returncode != 0 or "ERROR" in (r.stdout + r.stderr):
         return f"export failed: {(r.stdout + r.stderr)[-500:]}"
-    wd = os.path.join(repo, "web_deploy")
     src = os.path.join(repo, "build", "web")
     keep = ["index.html", "index.js", "index.pck", "index.wasm",
-            "index.service.worker.js", "index.manifest.json"]
+            "index.service.worker.js", "index.manifest.json",
+            "index.png", "index.icon.png", "index.apple-touch-icon.png",
+            "index.144x144.png", "index.180x180.png", "index.512x512.png",
+            "index.audio.worklet.js", "index.audio.position.worklet.js"]
+    scratch = "cloud_editor/deploy-staging"
+    cleanup = [["checkout", "-q", "main"], ["branch", "-q", "-D", scratch]]
+    git(repo, "checkout", "-q", "--orphan", scratch)
+    git(repo, "rm", "-rf", "-q", "--cached", ".")
     for name in keep:
-        s, d = os.path.join(src, name), os.path.join(wd, name)
+        s = os.path.join(src, name)
         if os.path.exists(s):
-            with open(s, "rb") as a, open(d, "wb") as b:
+            with open(s, "rb") as a, open(os.path.join(repo, name), "wb") as b:
                 b.write(a.read())
-    for args in (["add", "-A"], ["commit", "-m", "cloud_editor auto-deploy from feedback"],
-                 ["push", "-q", "origin", "main"]):
-        rr = git(repo, *args)
-        if rr.returncode != 0 and args[0] != "commit":
-            return f"git {args[0]} failed: {rr.stderr[-300:]}"
+            git(repo, "add", "-f", name)
+    rr = git(repo, "commit", "-q", "-m", "cloud_editor web deploy")
+    rr = git(repo, "push", "-q", "-f", "origin", f"{scratch}:deploy")
+    for args in cleanup:
+        git(repo, *args)
+    if rr.returncode != 0:
+        return f"push deploy failed: {rr.stderr[-300:]}"
     return None
 
 
@@ -690,13 +943,28 @@ def send_diff(cfg, chat_id, diff):
 
 
 def handle_feedback(cfg, repo, text, meta, state=None, reply_chat=None, sender=None):
+    """v4 two-tier loop. glm-5.3 (BOSS) triages the feedback into a tier + plan
+    JSON; openrouter/free WORKERS draft one diff per code/data subtask; the boss
+    reviews and either APPROVES the merged drafts or outputs its own corrected
+    diff — the reviewer owns the last word, so the diff that ships is always the
+    boss's. From there the v3 flow is unchanged: scratch branch -> gate wall ->
+    T3 confirm buttons / T1-T2 auto-deploy. An unparseable plan or any worker
+    failure (401/429/timeout/no key) degrades silently to the boss doing it all
+    itself (v3 single-shot); only the feedback entry meta records the fallback."""
     ts = time.strftime("%Y%m%d-%H%M%S")
     order_id = ts
     branch = f"{SCRATCH_BASE}-{order_id}"
     entry = {"time": ts, "text": text, "meta": meta}
     os.makedirs(FEEDBACK_DIR, exist_ok=True)
-    with open(os.path.join(FEEDBACK_DIR, f"{ts}.json"), "w") as f:
+    entry_path = os.path.join(FEEDBACK_DIR, f"{ts}.json")
+    with open(entry_path, "w") as f:
         json.dump(entry, f, indent=2)
+
+    def entry_note(extra):
+        """Audit-trail addenda (tier, crew/fallback bookkeeping) — never shown."""
+        entry.update(extra)
+        with open(entry_path, "w") as f:
+            json.dump(entry, f, indent=2)
 
     # The owner review channel always sees the raw player request, tagged.
     if reply_chat is not None and str(reply_chat) != str(cfg.get("chat_id")):
@@ -713,22 +981,95 @@ def handle_feedback(cfg, repo, text, meta, state=None, reply_chat=None, sender=N
         else:
             tg_send(cfg, msg)
 
-    context = (
+    def run_loop(messages, reply=None, diff=None, proposal=None):
+        return diff_loop(cfg, repo, state, reply_chat, player, note,
+                         order_id, branch, ts, messages,
+                         reply=reply, diff=diff, proposal=proposal)
+
+    facts = (
         "Repo facts: Godot 4.7 GDScript; scripts/ (logic RefCounted classes: GameManager "
         "arena, GameEight + Rules8 + LetterSource, BattleManager + Progression + RpgConfig, "
         "WordDatabase with SCOWL tiers via set_tier common/standard/expert); scenes/; "
-        "data/scowl_*.txt dictionaries; tests/ suites are the gate wall. "
-        f"Player feedback: {text!r} (context: {json.dumps(meta)})"
+        "data/scowl_*.txt dictionaries; tests/ suites are the gate wall."
     )
-    messages = [{"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": context}]
+    context = f"{facts} Player feedback: {text!r} (context: {json.dumps(meta)})"
+
     git(repo, "checkout", "-q", "-B", branch)
 
+    # --- Tier 1: the BOSS triages -> tier + plan JSON ({"reply", "subtasks"}).
+    triage_messages = [{"role": "system", "content": SYSTEM_PROMPT + TRIAGE_ADDENDUM},
+                       {"role": "user", "content": context}]
+    triage_reply = llm_boss(cfg, triage_messages)
+    plan = validate_plan(extract_plan(triage_reply))
+    if plan is None:
+        # Tolerant fallback: the v3 single-shot path, boss only, seeded with the
+        # wobbly triage output so the next ask nudges the format back on track.
+        entry_note({"brain": "boss-only (plan JSON unparseable)"})
+        return run_loop([{"role": "system", "content": SYSTEM_PROMPT},
+                         {"role": "user", "content": context},
+                         {"role": "assistant", "content": triage_reply},
+                         {"role": "user", "content": PLAN_NUDGE}])
+    plan_reply, subtasks = plan
+    entry_note({"brain": "boss+workers" if subtasks else "boss-only (T0)",
+                "plan_tier": plan_tier(subtasks), "subtasks": len(subtasks)})
+    if not subtasks:  # T0: a question/opinion — conversational reply, no diff
+        player(f"📬 Feedback received — no code change needed.\n\n{plan_reply}")
+        note(f"conversational reply ({ts})")
+        git(repo, "checkout", "-q", "main")
+        git(repo, "branch", "-q", "-D", branch)
+        return
+
+    # --- Tier 2: WORKERS draft the code/data subtasks; art stays with the boss.
+    drafts = []
+    flaked = 0
+    for st in subtasks:
+        if st["kind"] in ("code", "data"):
+            draft = worker_draft(cfg, st, facts)  # None on 401/429/timeout/no key
+            if draft is None:
+                flaked += 1  # silent single-tier fallback for this subtask
+        else:
+            draft = None  # kind "art": the boss drafts it in review, by design
+        drafts.append(draft)
+    if flaked:
+        entry_note({"worker_fallback":
+                    f"{flaked}/{len(subtasks)} subtasks -> boss drafted itself"})
+    merged = merge_drafts([d for d in drafts if d])
+
+    # --- Tier 3: the BOSS reviews; its output is the diff that ships.
+    review_messages = triage_messages + [
+        {"role": "assistant", "content": triage_reply},
+        {"role": "user", "content": review_brief(subtasks, drafts, plan_reply)},
+    ]
+    review_reply = llm_boss(cfg, review_messages)
+    final_diff = review_decision(review_reply, merged)
+    if final_diff is None:
+        review_messages += [{"role": "assistant", "content": review_reply},
+                            {"role": "user", "content": REVIEW_NUDGE}]
+        review_reply = llm_boss(cfg, review_messages)
+        final_diff = review_decision(review_reply, merged)
+    if final_diff is None:
+        # The reviewer never produced a usable diff — single-tier fallback: the
+        # boss implements the whole thing itself, v3 style.
+        entry_note({"brain": "boss-only (review never produced a diff)"})
+        return run_loop(review_messages + [
+            {"role": "assistant", "content": review_reply},
+            {"role": "user", "content": PLAN_NUDGE}])
+    return run_loop(review_messages, reply=review_reply, diff=final_diff,
+                    proposal=plan_reply)
+
+
+def diff_loop(cfg, repo, state, reply_chat, player, note, order_id, branch, ts,
+              messages, reply=None, diff=None, proposal=None):
+    """The v3 apply -> gates -> deploy retry loop, on a boss thread. Attempt 1
+    uses the seeded reply/diff (v4: the boss review output); later attempts
+    re-ask the boss with the failure pasted in. A reply with no diff means
+    conversational — same exit as v3."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        reply = llm(cfg, messages)
-        diff = extract_diff(reply)
+        if diff is None or attempt > 1:
+            reply = llm_boss(cfg, messages) or ""
+            diff = extract_diff(reply)
         if diff is None:
-            player(f"📬 Feedback received — no code change needed.\n\n{extract_message(reply)}")
+            player(f"📬 Feedback received — no code change needed.\n\n{extract_message(reply or '')}")
             note(f"conversational reply ({ts})")
             git(repo, "checkout", "-q", "main")
             git(repo, "branch", "-q", "-D", branch)
@@ -738,18 +1079,18 @@ def handle_feedback(cfg, repo, text, meta, state=None, reply_chat=None, sender=N
         applied = subprocess.run(["git", "-C", repo, "apply", "-"], input=diff,
                                  capture_output=True, text=True)
         if applied.returncode != 0:
-            messages.append({"role": "assistant", "content": reply})
+            messages.append({"role": "assistant", "content": reply or ""})
             messages.append({"role": "user", "content":
                              f"git apply failed:\n{applied.stderr}\nRegenerate the diff cleanly."})
             continue
         fails = run_gates(repo)
         if not fails:
             tier = diff_tier(diff)
+            proposal = proposal or extract_message(reply or "")
             if tier == "T3" and reply_chat is not None:
                 # T3 code changes ask first — park the proposal in the chat's
                 # session until a deploy button answers it. The scratch branch
                 # name embeds the order id and persists until then.
-                proposal = extract_message(reply)
                 save_session(reply_chat, {
                     "state": "confirm_feedback",
                     "data": {"order_id": order_id, "branch": branch, "diff": diff,
@@ -767,7 +1108,7 @@ def handle_feedback(cfg, repo, text, meta, state=None, reply_chat=None, sender=N
                 git(repo, "checkout", "-q", "main")
                 git(repo, "merge", "-q", "--ff-only", branch)
                 git(repo, "push", "-q", "origin", "main")
-                player(f"✅ Deployed! {extract_message(reply)}\n"
+                player(f"✅ Deployed! {proposal}\n"
                        f"(attempt {attempt}; gates green; live in ~1 min)")
                 if state is not None:
                     state["deployed_count"] = state.get("deployed_count", 0) + 1
@@ -778,7 +1119,7 @@ def handle_feedback(cfg, repo, text, meta, state=None, reply_chat=None, sender=N
             git(repo, "checkout", "-q", "main")
             git(repo, "branch", "-q", "-D", branch)
             return
-        messages.append({"role": "assistant", "content": reply})
+        messages.append({"role": "assistant", "content": reply or ""})
         messages.append({"role": "user", "content":
                          "Gates failed:\n" + "\n\n".join(fails)[:2000] + "\nFix and regenerate the full diff."})
 
@@ -1190,6 +1531,15 @@ def selftest():
     if not env_ok:
         failures.append("env CHAT_ID did not override config.json")
 
+    # v4: worker-tier key plumbing (env OPENROUTER_KEY wins)
+    os.environ["OPENROUTER_KEY"] = "env-or-key"
+    cfg = load_config()
+    or_ok = cfg["openrouter_key"] == "env-or-key"
+    del os.environ["OPENROUTER_KEY"]
+    print(f"  config env precedence (OPENROUTER_KEY): {'OK' if or_ok else 'FAIL'}")
+    if not or_ok:
+        failures.append("env OPENROUTER_KEY did not land in cfg")
+
     # v3: callback-data parsing
     cb_cases = [
         ("dep:yes", {"kind": "deploy", "action": "yes", "order": None}),
@@ -1355,6 +1705,81 @@ def selftest():
         check("my-games buttons are url-type",
               all("url" in g for g in games) and games[0]["url"] == "https://x/sv",
               repr(games))
+
+        # v4: plan-JSON extraction (tolerant: fenced, nested braces, prose around)
+        plan_json = ('{"reply": "on it", "subtasks": [{"id": 1, "kind": "code", '
+                     '"instruction": "nerf the dice", "files_hint": '
+                     '["scripts/game_manager.gd"]}]}')
+        plan = extract_plan(f"T3 code.\n```json\n{plan_json}\n```\nnothing else")
+        check("plan json inside a fence parses",
+              isinstance(plan, dict) and plan["reply"] == "on it", repr(plan))
+        braced = ('{"reply": "a {braced} \\"thing\\"", "subtasks": '
+                  '[{"id": 1, "kind": "data", "instruction": "x{}y", '
+                  '"files_hint": []}]}')
+        plan = extract_plan("Sure — tier T2. " + braced + " and prose after } end")
+        check("plan json with nested braces + surrounding prose parses",
+              plan and plan["subtasks"][0]["instruction"] == "x{}y", repr(plan))
+        check("no plan json -> None", extract_plan("just talk, no braces") is None)
+        check("unbalanced braces -> None", extract_plan('{"reply": "oops"') is None)
+        check("empty object parses but is unusable",
+              extract_plan("{}") == {} and validate_plan({}) is None)
+
+        # v4: subtask validation (kind whitelist, cap 3, junk dropped)
+        reply, subs = validate_plan({"reply": "ok", "subtasks": [
+            {"id": 1, "kind": "code", "instruction": "a", "files_hint": ["s/x.gd"]},
+            {"id": 2, "kind": "paint", "instruction": "b"},   # bad kind
+            {"id": 3, "kind": "DATA", "instruction": "c"},    # case-insensitive
+            {"id": 4, "kind": "art", "instruction": "   "},   # blank instruction
+            "junk",                                           # not a dict
+        ]})
+        check("subtasks filtered to code/art/data (case-insensitive)",
+              reply == "ok" and [s["kind"] for s in subs] == ["code", "data"],
+              repr((reply, subs)))
+        check("files_hint coerced to a list of str",
+              subs[0]["files_hint"] == ["s/x.gd"], repr(subs[0]))
+        many = [{"id": n, "kind": "code", "instruction": f"task {n}"}
+                for n in range(1, 6)]
+        _, capped = validate_plan({"reply": "go", "subtasks": many})
+        check("subtasks capped at 3 and re-id'd",
+              [s["id"] for s in capped] == [1, 2, 3], repr(capped))
+        r2, s2 = validate_plan({"reply": "hi", "subtasks": "junk"})
+        check("junk subtasks field -> empty list, reply kept",
+              r2 == "hi" and s2 == [], repr((r2, s2)))
+        check("missing reply -> plan invalid", validate_plan({"subtasks": []}) is None)
+        check("non-dict plan invalid", validate_plan([1, 2]) is None)
+        check("tier implied by subtask kinds",
+              plan_tier([]) == "T0"
+              and plan_tier([{"kind": "data"}]) == "T2"
+              and plan_tier([{"kind": "art"}]) == "T1"
+              and plan_tier([{"kind": "data"}, {"kind": "code"}]) == "T3")
+
+        # v4: cost-guard fallback (worker error -> boss drafts, silently)
+        check("blank worker reply -> boss drafts", needs_boss_draft("") is True)
+        check("whitespace reply -> boss drafts", needs_boss_draft("  \n ") is True)
+        check("real worker reply -> no fallback",
+              needs_boss_draft("```diff\n--- a/x\n+++ b/x\n```") is False)
+        check("worker without a key -> None draft (boss takes over)",
+              worker_draft({}, {"id": 1, "kind": "code", "instruction": "x",
+                                "files_hint": []}, "facts") is None)
+        check("llm_worker without a key -> '' (no network, no raise)",
+              llm_worker({}, []) == "")
+        check("merge_drafts joins and skips empties",
+              merge_drafts(["--- a/x\n", None, "  ", "+++ b/x"]) == "--- a/x\n+++ b/x")
+        check("merge_drafts all-empty -> ''", merge_drafts([None, ""]) == "")
+        gd = "--- a/scripts/x.gd\n+++ b/scripts/x.gd\n@@ -1 +1 @@\n-a\n+b"
+        check("review: the boss's own diff wins",
+              review_decision(f"revised:\n```diff\n{gd}\n```", "worker patch") == gd)
+        check("review: APPROVED ships the drafts as-is",
+              review_decision("APPROVED — clean.", "worker patch") == "worker patch")
+        check("review: APPROVED + own diff -> own diff",
+              review_decision(f"APPROVED after cleanup\n```diff\n{gd}\n```", "w") == gd)
+        check("review: waffle -> None (boss redoes it)",
+              review_decision("hmm, let me think", "worker patch") is None)
+        check("review: APPROVED with nothing to ship -> None",
+              review_decision("APPROVED", "") is None)
+        check("status line names the two-tier brain",
+              "brain: glm-5.3 boss + openrouter/free workers"
+              in status_report({"deployed_count": 2}))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1364,7 +1789,7 @@ def selftest():
             print("  -", f)
         return 1
     print(f"SELFTEST PASS ({len(cases)} intent cases, {len(cb_cases)} callback cases, "
-          "FSM + uploads + tiers + hub index + session round-trip)")
+          "FSM + uploads + tiers + hub index + session round-trip + crew/plan/review)")
     return 0
 
 
