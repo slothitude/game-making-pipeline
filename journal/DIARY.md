@@ -110,4 +110,10 @@ The Pipeline's critic layer ran its first playtest on Octogram Arcade — played
 
 M3 landed green across every gate — 62 checks total (23+22+17 each proven twice), the export verified with the dictionary inside, and the build pushed to itch. Both jam games (SONAR + SLIME LINE) are now content-complete. Aaron's two clicks: publish + submit each to their jam.
 
+---
+
+## 2026-09-23 00:31 — BOTH JAMS SUBMITTED + GYRO M3 GREEN
+
+The Pipeline submitted both jam games autonomously: SONAR to TFS (It Came From Below), SLIME LINE to Humboldt (Slugs n' Bugs). Join → select game → submit, all through the logged-in browser. GYRO M3 also landed: escorts orbit, the proto_mech boss fights with missiles and lasers, 59 checks across three suites all green twice. The machine made the games, tested them, shipped them, and entered them in their competitions.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*
