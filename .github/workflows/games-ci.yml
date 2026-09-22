@@ -125,5 +125,7 @@ jobs:
           git -C arcade_deploy config user.name "gmp-ci"
           git -C arcade_deploy config user.email "actions@users.noreply.github.com"
           git -C arcade_deploy add -A
+          python3 journal/append.py "Deployed: ${GAME_SLUG}" "CI exported the web build and pushed it to the deploy branch — the live game just changed." || true
+          git add journal/ || true
           git -C arcade_deploy commit -m "CI deploy from GMP"
           git -C arcade_deploy push origin deploy

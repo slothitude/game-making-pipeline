@@ -93,9 +93,10 @@ jobs:
           jq --arg owner "$OWNER" --arg title "$TITLE" --arg url "${DEST}/" --arg slug "$SLUG" \
              '. += [{"owner_id": $owner, "title": $title, "slug": $slug, "url": $url, "updated": (now | todate)}]' \
              games/index.json > games/index.json.tmp && mv games/index.json.tmp games/index.json
+          python3 journal/append.py "A game is born: ${TITLE}" "The factory instantiated ${TITLE} from the ${DEST} template, the gate wall said yes, and it's live for its player." || true
           git config user.name gmp-factory
           git config user.email actions@users.noreply.github.com
-          git add games/
+          git add games/ journal/
           git commit -m "factory: publish ${TITLE} (${DEST})"
           git push
 
