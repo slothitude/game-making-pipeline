@@ -464,21 +464,23 @@ class ItchWeb:
         self.dump(page, f"no_save_button_{context}")
         raise ItchError(f"no 'Save' button found on {context} page (dumped no_save_button_{context}.html)")
 
-    def _set_editor(self, page: Page, text: str, context: str = "editor") -> None:
-        """Write markdown/HTML into a Redactor X description editor.
+    def _set_editor(self, page: Page, text: str, context: str = "editor",
+                    textarea_name: str = "game[description]") -> None:
+        """Write markdown/HTML into a Redactor X editor.
 
         Discovered: .redactor-box contains .redactor-toolbar-box (with a.re-html
         source toggle), the visible contenteditable .redactor-layer, the hidden
-        backing textarea (name='game[description]') and a source-mode textarea.
+        backing textarea (name='game[description]' / 'post[body]') and a
+        source-mode textarea.
 
-        Strategy: open source mode in the description's box, fill the source
-        textarea, toggle back (parses into the visual editor), then verify the
-        backing textarea. Fallback: type into the contenteditable layer.
+        Strategy: open source mode in the box, fill the source textarea, toggle
+        back (parses into the visual editor), then verify the backing textarea.
+        Fallback: type into the contenteditable layer.
         """
-        box = page.locator("div.redactor-box:has(textarea[name='game[description]'])").first
+        box = page.locator(f"div.redactor-box:has(textarea[name='{textarea_name}'])").first
         if not box.count():
             self.dump(page, f"editor_no_box_{context}")
-            raise ItchError(f"no redactor box for the description ({context})")
+            raise ItchError(f"no redactor box for {textarea_name} ({context})")
         toggle = box.locator(".re-html").first
         source = box.locator("textarea").locator("visible=true").first
         if toggle.count():
@@ -490,14 +492,26 @@ class ItchWeb:
                 page.wait_for_timeout(400)
             except (PWTimeout, Exception):
                 pass
-        # verify the hidden backing textarea actually carries our text
-        synced = page.evaluate(
-            """() => {
-                 const ta = document.querySelector("textarea[name='game[description]']");
-                 return ta ? ta.value : null;
-               }"""
-        )
-        if synced == text:
+
+        def synced_value() -> str | None:
+            return page.evaluate(
+                """(name) => {
+                     const ta = document.querySelector(`textarea[name='${name}']`);
+                     return ta ? ta.value : null;
+                   }""",
+                textarea_name,
+            )
+
+        def norm(s: str | None) -> str:
+            """Redactor rewrites what we type (it auto-links bare URLs, wraps
+            paragraphs), so compare tag-stripped, whitespace-collapsed text.
+            Tags become spaces so paragraph splits don't glue words together."""
+            import re as _re
+            return _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", s or "")).strip()
+
+        want = norm(text)
+        got = norm(synced_value())
+        if want and want in got:
             return
         # fallback: type into the contenteditable layer (redactor syncs it live)
         layer = box.locator(".redactor-layer").first
@@ -506,18 +520,94 @@ class ItchWeb:
         page.keyboard.press("Delete")
         page.keyboard.insert_text(text)
         page.wait_for_timeout(400)
-        synced = page.evaluate(
-            """() => {
-                 const ta = document.querySelector("textarea[name='game[description]']");
-                 return ta ? ta.value : null;
-               }"""
-        )
-        if synced != text:
+        got = norm(synced_value())
+        if not (want and want in got):
             self.dump(page, f"editor_not_synced_{context}")
             raise ItchError(
-                f"description editor did not take the text ({context}; got {len(synced or '')} chars, "
-                f"wanted {len(text)}; dumped editor_not_synced_{context}.html)"
+                f"editor did not take the text ({context}; got {got[:120]!r}, "
+                f"wanted {want[:120]!r}; dumped editor_not_synced_{context}.html)"
             )
+
+    def post_devlog(self, game_id: int, title: str, body_markdown: str,
+                    image_path: str | None = None, classification: str = "general_update",
+                    publish: bool = True) -> dict[str, Any]:
+        """Post a devlog via https://itch.io/dashboard/game/<id>/new-devlog.
+
+        Discovered form: post[title], Redactor X over post[body], REQUIRED
+        post[user_classification] radios, post[published] visibility checkbox
+        (UNCHECKED by default -- a plain Save yields a draft post), cover image
+        via the #image-uploader-0 button (lazy file input), submit is a plain
+        <button class="button">Save</button>.
+        """
+        page = self.page
+        self.goto(f"{self.base}/dashboard/game/{game_id}/new-devlog")
+        page.wait_for_selector("input[name='post[title]']", timeout=20_000)
+        title_field = page.locator("input[name='post[title]']").first
+        title_field.click()
+        title_field.fill(title)
+        # post type is required -- default to general_update unless asked otherwise
+        radio = page.locator(f"input[name='post[user_classification]'][value='{classification}']").first
+        if not radio.count():
+            self.dump(page, f"devlog_bad_classification_{game_id}")
+            raise ItchError(f"unknown devlog classification {classification!r} (dumped devlog_bad_classification_{game_id}.html)")
+        lbl = page.locator(f"label:has(input[name='post[user_classification]'][value='{classification}'])").first
+        (lbl if lbl.count() else radio).click()
+        self._set_editor(page, body_markdown, context=f"devlog_{game_id}", textarea_name="post[body]")
+        if image_path:
+            self._attach_cover_image(page, image_path, context=f"devlog_{game_id}")
+        if publish:
+            pub = page.locator("input[name='post[published]']").first
+            if pub.count() and not pub.is_checked():
+                plbl = page.locator("label:has(input[name='post[published]'])").first
+                (plbl if plbl.count() else pub).click()
+        # submit: plain .button whose exact text is 'Save'
+        save = page.locator("button.button", has_text=re.compile(r"^\s*Save\s*$")).first
+        if not save.count():
+            self.dump(page, f"devlog_no_save_{game_id}")
+            raise ItchError(f"no Save button on devlog form (dumped devlog_no_save_{game_id}.html)")
+        save.click()
+        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_timeout(1200)
+        # verify the post shows on the devlog index
+        self.goto(f"{self.base}/dashboard/game/{game_id}/devlog")
+        page.wait_for_timeout(800)
+        found = page.evaluate("(t) => document.body.innerText.includes(t)", title)
+        if not found:
+            self.dump(page, f"devlog_not_listed_{game_id}")
+            raise ItchError(f"devlog {title!r} not found on the devlog index of {game_id} (dumped devlog_not_listed_{game_id}.html)")
+        return {"game_id": game_id, "title": title, "published": publish, "image": image_path}
+
+    def _attach_cover_image(self, page: Page, image_path: str, context: str = "devlog") -> None:
+        """Click the lazy 'Upload image' uploader and feed the revealed file input."""
+        path = Path(image_path)
+        if not path.exists():
+            raise ItchError(f"image to attach does not exist: {path}")
+        btn = page.locator("button[id^='image-uploader-']").first
+        if not btn.count():
+            self.dump(page, f"image_no_uploader_{context}")
+            raise ItchError(f"no image uploader button (dumped image_no_uploader_{context}.html)")
+        btn.click()
+        file_input = page.locator("input[type='file']").last
+        try:
+            file_input.wait_for(state="attached", timeout=8_000)
+        except PWTimeout:
+            self.dump(page, f"image_no_file_input_{context}")
+            raise ItchError(f"no file input appeared after clicking Upload image (dumped image_no_file_input_{context}.html)")
+        file_input.set_input_files(str(path))
+        # the hidden post[cover_image_id] gets filled once the upload finishes
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            val = page.evaluate(
+                """() => {
+                     const el = document.querySelector("input[name='post[cover_image_id]']");
+                     return el ? el.value : null;
+                   }"""
+            )
+            if val:
+                return
+            time.sleep(0.5)
+        self.dump(page, f"image_upload_stuck_{context}")
+        raise ItchError(f"image upload never completed (cover_image_id still empty; dumped image_upload_stuck_{context}.html)")
 
     def _goto_edit(self, page: Page, game_id: int) -> None:
         self.goto(f"{self.base}/game/edit/{game_id}")
@@ -666,6 +756,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--file", default=None)
     p.add_argument("--text", default=None)
 
+    p = sub.add_parser("devlog", help="post a devlog entry")
+    p.add_argument("--id", type=int, required=True)
+    p.add_argument("--title", required=True)
+    p.add_argument("--file", default=None, help="markdown/HTML file for the body")
+    p.add_argument("--text", default=None)
+    p.add_argument("--image", default=None, help="cover image to attach")
+    p.add_argument("--classification", default="general_update")
+    p.add_argument("--no-publish", action="store_true", help="leave the post as a draft")
+
     for name in ("publish", "unpublish"):
         p = sub.add_parser(name)
         p.add_argument("--id", type=int, required=True)
@@ -704,6 +803,14 @@ def main(argv: list[str] | None = None) -> int:
                 ap.error("description needs --file or --text")
             md = Path(args.file).read_text(encoding="utf-8") if args.file else args.text
             print(json.dumps(web.edit_description(args.id, md or ""), indent=2))
+        elif args.cmd == "devlog":
+            if not (args.file or args.text):
+                ap.error("devlog needs --file or --text")
+            md = Path(args.file).read_text(encoding="utf-8") if args.file else args.text
+            print(json.dumps(web.post_devlog(
+                args.id, args.title, md or "", image_path=args.image,
+                classification=args.classification, publish=not args.no_publish,
+            ), indent=2))
         elif args.cmd in ("publish", "unpublish"):
             print(json.dumps(getattr(web, args.cmd)(args.id), indent=2))
         elif args.cmd == "check":

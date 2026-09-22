@@ -80,6 +80,7 @@ REPO_DEFAULT = r"C:\Users\aaron\octogram-arcade"
 GODOT = os.environ.get("GODOT_BIN") or r"C:\Users\aaron\AppData\Local\Godot\Godot_v4.7.1-stable_win64.exe"
 LLM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 LLM_MODEL = "z-ai/glm-5.3"          # BOSS tier: triage, review, last word
+BOSS_BACKUP_MODEL = "moonshotai/kimi-k3"  # same NVIDIA endpoint; faster; vision-capable
 WORKER_URL = "https://openrouter.ai/api/v1/chat/completions"
 WORKER_MODEL = "openrouter/free"    # WORKER tier: drafts code/data subtasks
 PLAN_KINDS = ("code", "art", "data")  # subtask whitelist (art stays with the boss)
@@ -646,15 +647,20 @@ def deploy_buttons(order_id):
 
 
 def _boss_call(cfg, payload):
-    """Boss endpoint with acting-boss degradation: if the primary LLM gateway
-    times out twice (free-tier 504s), the worker model takes the desk with the
-    same instructions — the Pipeline never stalls on one dead endpoint."""
-    for attempt in range(2):
-        try:
-            return api_post(LLM_URL, payload, token=cfg["nvapi_key"])
-        except Exception as exc:  # noqa: BLE001
-            print(f"boss endpoint failed (attempt {attempt + 1}): {exc}", flush=True)
-            time.sleep(15)
+    """Brain chain, three deep, never stalls: glm-5.3 (primary) -> kimi-k3
+    (same NVIDIA endpoint, faster, vision-capable) -> openrouter/free worker
+    takeover. Each tier gets two attempts before the desk passes."""
+    for model in (LLM_MODEL, BOSS_BACKUP_MODEL):
+        attempt_payload = dict(payload)
+        attempt_payload["model"] = model
+        if model != LLM_MODEL:
+            attempt_payload.pop("chat_template_kwargs", None)
+        for attempt in range(2):
+            try:
+                return api_post(LLM_URL, attempt_payload, token=cfg["nvapi_key"])
+            except Exception as exc:  # noqa: BLE001
+                print(f"boss {model} failed (attempt {attempt + 1}): {exc}", flush=True)
+                time.sleep(15)
     print("DEGRADED: worker as acting boss", flush=True)
     try:
         takeover = dict(payload)
