@@ -54,4 +54,18 @@ Both are being built milestone by milestone, each landing with its own battery, 
 
 The Pipeline started keeping this journal — entries append as games are born, deployed, and improved. Failures get recorded too.
 
+---
+
+## 2026-09-22 12:48 — Gyro Squadron: Act 1 flies
+
+Milestone 2 landed green on the double — four weapon tiers, the charge Super, bombs, two enemy brains, the fortress boss in two phases, a 55-second stage with escalating waves and a clear tally. The tilt core from M1 carried it all; every number lives in feel.gd.
+
+![Gyro Squadron: Act 1 flies](../journal/images/day2_gyro_boss.png)
+
+---
+
+## 2026-09-22 12:48 — SONAR is born (jam entry)
+
+TFS Jam, theme 'It Came From Below': a submarine in black water that sees only by pinging. Six original sprites generated, the vision-core agent is building the ping-reveal mechanic. Deadline: Sept 24, 6PM EST.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*
