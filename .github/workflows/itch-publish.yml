@@ -1,0 +1,63 @@
+name: Publish to itch.io
+
+# Pushes a game's web build to itch.io via butler (official itch distribution
+# channel). The web build runs in itch's HTML5 embed.
+#   gh workflow run itch-publish.yml -f game=octogram-arcade -f itch_target=USERNAME/game-slug
+# ITCH_TARGET format: <itch-username>/<itch-game-slug>; channel is fixed "html5".
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Game repo (owner: slothitude) — must have a deploy branch with the web export"
+        required: true
+        default: octogram-arcade
+        type: choice
+        options:
+          - octogram-arcade
+          - star-visitor
+          - gyro-squadron-45
+      itch_target:
+        description: "itch target: <username>/<game-slug> (e.g. slothitudegames/octogram-arcade)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: butler push (html5 channel)
+    runs-on: ubuntu-latest
+    env:
+      BUTLER_API_KEY: ${{ secrets.ITCH_API_KEY }}
+      GAME_SLUG: ${{ inputs.game }}
+      ITCH_TARGET: ${{ inputs.itch_target }}
+    steps:
+      - name: Install butler (official broth build)
+        run: |
+          set -e
+          curl -L -o butler.zip "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
+          unzip -q butler.zip
+          chmod +x butler
+          ./butler --version
+
+      - name: Fetch the game's web export (deploy branch)
+        env:
+          GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+        run: |
+          set -e
+          git clone --depth 1 --branch deploy \
+            "https://x-access-token:${GAMES_TOKEN}@github.com/slothitude/${GAME_SLUG}.git" webbuild
+
+      - name: Push to itch (html5 channel)
+        run: |
+          set -e
+          ./butler push webbuild "${ITCH_TARGET}:html5" --userversion "ci-${GITHUB_SHA::7}"
+
+      - name: Diary entry + notify
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          MSG="itch.io updated: ${ITCH_TARGET} (${GAME_SLUG}, html5 channel)"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="5597932516" -d text="[itch] ${MSG}" || true

@@ -50,8 +50,6 @@ Both are being built milestone by milestone, each landing with its own battery, 
 
 ---
 
----
-
 ## 2026-09-22 10:40 — The diary begins
 
 The Pipeline started keeping this journal — entries append as games are born, deployed, and improved. Failures get recorded too.
