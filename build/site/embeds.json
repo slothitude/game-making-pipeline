@@ -1,0 +1,14 @@
+{
+  "embeds": {
+    "octogram-arcade": "https://html-classic.itch.zone/html/19348737-2003020/index.html?v=1790053000",
+    "sonar": "https://html-classic.itch.zone/html/19348951-2004577/index.html?v=1790089789",
+    "slime-line": "https://html-classic.itch.zone/html/19353113-2004441/index.html?v=1790087642"
+  },
+  "pages": {
+    "octogram-arcade": "https://slothitude.itch.io/octogram-arcade",
+    "sonar": "https://slothitude.itch.io/sonar",
+    "slime-line": "https://slothitude.itch.io/slime-line",
+    "star-visitor": "https://slothitude.itch.io/star-visitor",
+    "gyro-squadron-45": "https://slothitude.itch.io/gyro-squadron-45"
+  }
+}

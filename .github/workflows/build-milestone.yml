@@ -1,0 +1,278 @@
+name: Build Milestone
+
+# THE PIPELINE BUILDER — this workflow IS the game-building agent.
+# Rog writes the spec; this workflow builds the milestone in the cloud.
+# The brain chain writes complete files, the godot gate wall judges.
+#
+#   gh workflow run build-milestone.yml -f game=sonar -f milestone=4
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Game repo name (slothitude/<game>)"
+        required: true
+        type: choice
+        options:
+          - octogram-arcade
+          - sonar
+          - slime-line
+          - star-visitor
+          - gyro-squadron-45
+          - cubefall
+      milestone:
+        description: "Milestone number to build (reads spec from the game repo)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Brain builds -> gates judge -> deploy
+    runs-on: ubuntu-latest
+    container:
+      image: docker://barichello/godot-ci:4.7.1
+    env:
+      GAME_SLUG: ${{ inputs.game }}
+      MILESTONE: ${{ inputs.milestone }}
+      NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+      GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+      GODOT_BIN: godot
+    steps:
+      - name: Install prerequisites
+        run: apt-get update && apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig python3
+
+      - name: Checkout game repo
+        uses: actions/checkout@v4
+        with:
+          repository: slothitude/${{ inputs.game }}
+          ref: main
+          token: ${{ secrets.GAMES_TOKEN }}
+          path: game
+
+      - name: Read the milestone spec
+        id: spec
+        run: |
+          set -e
+          # Try spec/study_spec.json then spec/jam_spec.json
+          SPEC=""
+          for f in spec/study_spec.json spec/jam_spec.json; do
+            if [ -f "game/$f" ]; then SPEC="game/$f"; break; fi
+          done
+          if [ -z "$SPEC" ]; then
+            echo "No spec file found" >&2
+            exit 1
+          fi
+          # Extract milestones array + relevant systems
+          MILESTONES=$(jq -c '.milestones // []' "$SPEC")
+          SYSTEMS=$(jq -c '.systems // {}' "$SPEC")
+          echo "milestones=$MILESTONES" >> "$GITHUB_OUTPUT"
+          echo "systems=$SYSTEMS" >> "$GITHUB_OUTPUT"
+          echo "spec_file=$SPEC" >> "$GITHUB_OUTPUT"
+
+      - name: Read existing code (for context)
+        run: |
+          # Give the brain the file listing + key files so it writes compatible code
+          cd game
+          find . -name "*.gd" -o -name "*.tscn" | head -30 > /tmp/file_list.txt
+          # Get feel.gd if it exists (the constants file)
+          if [ -f scripts/feel.gd ]; then
+            head -80 scripts/feel.gd > /tmp/feel_gd.txt
+          fi
+          # Get the test listing
+          ls tests/*.gd 2>/dev/null > /tmp/test_list.txt || echo "(no tests yet)" > /tmp/test_list.txt
+
+      - name: Brain chain writes the milestone
+        run: |
+          set -e
+          cd game
+          git checkout -q -b "milestone/m${MILESTONE}"
+          cd ..
+          python3 - <<'PYEOF'
+          import json, os, re, subprocess, time, urllib.request
+
+          NVAPI = os.environ["NVAPI_KEY"]
+          OPENROUTER = os.environ.get("OPENROUTER_KEY", "")
+          GODOT = os.environ.get("GODOT_BIN", "godot")
+          REPO = "game"
+          MILESTONE = os.environ.get("MILESTONE", "1")
+
+          def api(url, payload, key):
+              req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
+                  "Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=400) as resp:
+                  body = json.loads(resp.read().decode())
+              content = body["choices"][0]["message"].get("content") or ""
+              if not content.strip():
+                  raise RuntimeError("empty llm content")
+              return content
+
+          def brain(messages, max_tokens=16384):
+              """Three-deep chain: glm-5.3 → kimi-k3 → openrouter/free."""
+              for model in ("z-ai/glm-5.3", "moonshotai/kimi-k3"):
+                  for _ in range(2):
+                      try:
+                          return api("https://integrate.api.nvidia.com/v1/chat/completions",
+                                     {"model": model, "messages": messages,
+                                      "temperature": 0.3, "max_tokens": max_tokens}, NVAPI)
+                      except Exception as e:
+                          print(f"brain {model}: {e}", flush=True)
+                          time.sleep(10)
+              # openrouter takeover
+              payload = {"model": "openrouter/free", "messages": messages,
+                         "temperature": 0.3, "max_tokens": max_tokens}
+              req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions",
+                  data=json.dumps(payload).encode(),
+                  headers={"Authorization": f"Bearer {OPENROUTER}", "Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=400) as resp:
+                  body = json.loads(resp.read().decode())
+              return body["choices"][0]["message"]["content"]
+
+          def write_files(repo, output):
+              """Parse ```path:file.gd blocks and write complete files."""
+              pattern = re.compile(
+                  r"```(?:[a-zA-Z0-9_./-]+:)?\s*([a-zA-Z0-9_./-]+\.(?:gd|tscn|godot|cfg|txt|json))\s*\n(.*?)```",
+                  re.DOTALL)
+              made = []
+              for m in pattern.finditer(output):
+                  rel, code = m.group(1), m.group(2)
+                  dest = os.path.join(repo, rel)
+                  os.makedirs(os.path.dirname(dest), exist_ok=True)
+                  open(dest, "w", encoding="utf-8", newline="\n").write(code)
+                  made.append(rel)
+              return made
+
+          def gates(repo):
+              """Run the 2x gate wall on all test suites."""
+              fails = []
+              subprocess.run([GODOT, "--headless", "--path", repo, "--import"],
+                             capture_output=True, timeout=600)
+              tdir = os.path.join(repo, "tests")
+              if not os.path.isdir(tdir):
+                  return ["NO TESTS DIR"], []
+              suites = sorted(f[:-3] for f in os.listdir(tdir) if f.endswith(".gd"))
+              for suite in suites:
+                  for run_i in range(2):
+                      r = subprocess.run(
+                          [GODOT, "--headless", "--path", repo, "--script", f"res://tests/{suite}.gd"],
+                          capture_output=True, text=True, timeout=900)
+                      out = r.stdout + r.stderr
+                      if r.returncode != 0 or re.search(r"[1-9]\d* failed", out):
+                          fails.append(f"{suite} run{run_i+1}: " + "\n".join(out.splitlines()[-8:]))
+              return fails, suites
+
+          # Read the spec
+          with open(os.path.join("game", "spec", "study_spec.json")) as f:
+              spec = json.load(f)
+          milestones = spec.get("milestones", [])
+          systems = json.get = spec.get("systems", {})
+
+          # Get context from existing code
+          file_list = open("/tmp/file_list.txt").read() if os.path.exists("/tmp/file_list.txt") else "(new project)"
+          feel_gd = open("/tmp/feel_gd.txt").read()[:2000] if os.path.exists("/tmp/feel_gd.txt") else "(no feel.gd yet)"
+          test_list = open("/tmp/test_list.txt").read() if os.path.exists("/tmp/test_list.txt") else "(no tests)"
+
+          milestone_desc = milestones[int(MILESTONE) - 1] if int(MILESTONE) <= len(milestones) else f"Milestone {MILESTONE}"
+
+          system = (
+              "You are the Game Making Pipeline's milestone builder. You write COMPLETE Godot 4.7 "
+              "GDScript projects. Output ONLY files as fenced blocks ```path:scripts/foo.gd — every "
+              "file COMPLETE (full file, not a diff), tabs, no placeholders.\n\n"
+              "LAWS (never break):\n"
+              "1. Every tunable number is a named const in scripts/feel.gd\n"
+              "2. Tests are SceneTree scripts: deferred start (_summary.call_deferred()), await pattern, "
+              "PASS/FAIL lines + 'Ran N checks: X passed, 0 failed' summary, quit(1/0)\n"
+              "3. Phone-portrait 540x960 (2D) or as specified (3D), canvas_items/expand, gl_compatibility\n"
+              "4. Code-drawn art only (no image files unless they already exist)\n"
+              "5. All prior test suites must stay green — don't break existing tests\n"
+              "6. Write the NEW milestone's tests too (12-20 checks + a replay)")
+
+          context = (
+              f"GAME SPEC:\n{json.dumps(spec, indent=1)[:3000]}\n\n"
+              f"MILESTONE TO BUILD: {milestone_desc}\n\n"
+              f"EXISTING FILES:\n{file_list}\n\n"
+              f"EXISTING CONSTANTS (feel.gd):\n{feel_gd}\n\n"
+              f"EXISTING TESTS:\n{test_list}\n\n"
+              f"Write all files for this milestone. Include updated feel.gd, new scripts, "
+              f"updated main scene, and the new test suite.")
+
+          messages = [{"role": "system", "content": system},
+                      {"role": "user", "content": context}]
+
+          for attempt in range(3):
+              print(f"=== ATTEMPT {attempt + 1} ===", flush=True)
+              out = brain(messages)
+              made = write_files(REPO, out)
+              if not made:
+                  messages.append({"role": "user", "content": "No files parsed. Use ```path:file.gd format."})
+                  continue
+              print(f"Wrote {len(made)} files: {made}", flush=True)
+              fails, suites = gates(REPO)
+              if not fails and suites:
+                  print(f"GREEN: {len(suites)} suites passed twice", flush=True)
+                  subprocess.run(["git", "-C", REPO, "add", "-A"])
+                  subprocess.run(["git", "-C", REPO, "-c", "user.name=gmp-builder",
+                                  "-c", "user.email=actions@noreply.github.com",
+                                  "commit", "-q", "-m", f"milestone {MILESTONE} (attempt {attempt+1})"])
+                  exit(0)
+              print(f"GATES FAILED:\n{chr(10).join(fails[:5])}", flush=True)
+              messages += [
+                  {"role": "assistant", "content": out[-2000:]},
+                  {"role": "user", "content",
+                   "Gates failed:\n" + "\n".join(fails)[:2500] + "\nWrite the FULL corrected files."}]
+
+          print("NOT_GREEN after 3 attempts", flush=True)
+          exit(1)
+          PYEOF
+
+      - name: Push the milestone
+        if: success()
+        run: |
+          set -e
+          cd game
+          git push -q -f origin "milestone/m${MILESTONE}:milestone/m${MILESTONE}"
+          # Also merge to main
+          git checkout -q main
+          git merge -q "milestone/m${MILESTONE}" || {
+            git checkout -q "milestone/m${MILESTONE}"
+            git push -q -f origin HEAD:main
+          }
+          echo "MILESTONE_PUSHED"
+
+      - name: Export Web + deploy
+        if: success()
+        run: |
+          set -e
+          cd game
+          git checkout -q main
+          godot --headless --path . --export-release "Web" || echo "export may need preset"
+          if [ -d build/web ] || [ -d export/web ]; then
+            WEB_DIR=$( [ -d build/web ] && echo build/web || echo export/web )
+            # Push to deploy branch (retromonkey + Pages serve this)
+            git checkout -q --orphan deploy-tmp
+            git rm -rf --cached . -q
+            cp -r $WEB_DIR/* .
+            git add -f index.html index.js index.pck index.wasm index.service.worker.js index.manifest.json 2>/dev/null || true
+            git -c user.name=gmp-builder -c user.email=actions@noreply.github.com commit -q -m "web deploy m${MILESTONE}"
+            git push -q -f origin HEAD:deploy
+            git checkout -q main
+            echo "DEPLOYED"
+          fi
+
+      - name: Notify Telegram
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              -d chat_id="${CHAT_ID}" \
+              -d text="✅ Milestone ${MILESTONE} built and deployed: ${GAME_SLUG}" || true
+          else
+            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              -d chat_id="${CHAT_ID}" \
+              -d text="🛑 Milestone ${MILESTONE} failed for ${GAME_SLUG} — spec may need adjustment" || true
+          fi
