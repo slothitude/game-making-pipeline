@@ -397,33 +397,46 @@ class ItchWeb:
 
     def create_project(self, title: str, slug: str | None = None, tagline: str = "",
                        description_md: str = "") -> dict[str, Any]:
-        """Create a draft project at /game/new; returns {id, url, edit_url}."""
+        """Create a draft project at /game/new; returns {id, url, edit_url}.
+
+        Discovered form (itch_web/debug/game_new.dom.txt):
+          title    -> input[name='game[title]']
+          slug     -> input[name='game[slug]']
+          tagline  -> input[name='game[short_text]']
+          body     -> Redactor X editor over textarea[name='game[description]']
+          AI       -> radios ai_disclosure[ai_generated] (yes/no), unanswered by
+                      default -- we answer YES (our games are AI-assisted, disclosed)
+          state    -> game[published] radios; 'draft' is checked by default and
+                      'published' is disabled until first save -- so a fresh
+                      project can only land as a draft.
+        """
         page = self.page
         self.goto(self.base + "/game/new")
         page.wait_for_selector("input[name='game[title]']", timeout=20_000)
-        page.locator("input[name='game[title]']").first.click()
-        page.locator("input[name='game[title]']").first.fill(title)
+        title_field = page.locator("input[name='game[title]']").first
+        title_field.click()
+        title_field.fill(title)
         if slug:
-            slug_field = page.locator("input[name='game[url]'], input[name='game[url_slug]'], .url_slug input, input[name*='slug']").first
-            try:
-                slug_field.wait_for(state="visible", timeout=4_000)
-                slug_field.click()
-                slug_field.fill(slug)
-            except PWTimeout:
-                self.dump(page, "create_no_slug_field")
-                raise ItchError("could not find the project-URL/slug field (dumped create_no_slug_field.html)")
+            slug_field = page.locator("input[name='game[slug]']").first
+            slug_field.click()
+            slug_field.fill(slug)
         if tagline:
-            tag = page.locator("input[name='game[short_text]'], textarea[name='game[short_text]']").first
-            if tag.count():
-                tag.click()
-                tag.fill(tagline)
-            else:
-                self.dump(page, "create_no_tagline_field")
-                raise ItchError("could not find the tagline/short-text field (dumped create_no_tagline_field.html)")
+            tag = page.locator("input[name='game[short_text]']").first
+            tag.click()
+            tag.fill(tagline)
+        # AI disclosure: answer truthfully -- these are AI-assisted, human-directed
+        ai_yes = page.locator("input[name='ai_disclosure[ai_generated]'][value='yes']").first
+        if ai_yes.count():
+            label = page.locator("label:has(input[name='ai_disclosure[ai_generated]'][value='yes'])").first
+            (label if label.count() else ai_yes).click()
+        # make sure we are creating a draft (default, but be explicit)
+        draft = page.locator("input[name='game[published]'][value='draft']").first
+        if draft.count() and not draft.is_checked():
+            lbl = page.locator("label:has(input[name='game[published]'][value='draft'])").first
+            (lbl if lbl.count() else draft).click()
         if description_md:
             self._set_editor(page, description_md, context="create")
-        save = self._save_button(page, context="create")
-        save.click()
+        self._save_button(page, context="create").click()
         # After save we land on /game/edit/<id> (or the project page).
         deadline = time.time() + 30
         m = None
@@ -437,80 +450,74 @@ class ItchWeb:
             raise ItchError(f"save did not lead to /game/edit/<id> (at {page.url})")
         game_id = int(m.group(1))
         # verify the edit page actually loads
-        page.wait_for_selector("input[name='game[title]'], .game_edit_page, .edit_game_sidebar", timeout=20_000)
+        page.wait_for_selector("input[name='game[title]']", timeout=20_000)
         url = f"{self.games_base}/{slug}" if slug else None
         return {"id": game_id, "url": url, "edit_url": f"{self.base}/game/edit/{game_id}"}
 
     def _save_button(self, page: Page, context: str = "edit") -> Locator:
-        """The submit is the 'Save' button in the bottom meta bar."""
-        candidates = [
-            ".meta_row .buttons .button[type='submit']",
-            ".meta_row .buttons button[type='submit']",
-            ".meta_row .buttons .button",
-            "button[type='submit']",
-            ".button.save_btn",
-        ]
-        for sel in candidates:
-            for i in range(page.locator(sel).count()):
-                loc = page.locator(sel).nth(i)
-                txt = (loc.inner_text() or "").strip().lower()
-                if txt == "save":
-                    return loc
+        """Discovered: the submit in the bottom bar is <button class="button save_btn">
+        labelled 'Save & view page' (new-project form); edit pages reuse .save_btn."""
+        for sel in [".buttons button.save_btn", "button.save_btn", ".meta_row .buttons .button[type='submit']", "button[type='submit']"]:
+            loc = page.locator(sel).first
+            if loc.count():
+                return loc
         self.dump(page, f"no_save_button_{context}")
         raise ItchError(f"no 'Save' button found on {context} page (dumped no_save_button_{context}.html)")
 
     def _set_editor(self, page: Page, text: str, context: str = "editor") -> None:
-        """Write markdown/HTML into the description editor (Redactor rich text).
+        """Write markdown/HTML into a Redactor X description editor.
 
-        Strategy order:
-          1. the redactor source-code toggle (<> button) + its textarea
-          2. direct Redactor JS API (code.set)
-          3. set the backing textarea + sync events
+        Discovered: .redactor-box contains .redactor-toolbar-box (with a.re-html
+        source toggle), the visible contenteditable .redactor-layer, the hidden
+        backing textarea (name='game[description]') and a source-mode textarea.
+
+        Strategy: open source mode in the description's box, fill the source
+        textarea, toggle back (parses into the visual editor), then verify the
+        backing textarea. Fallback: type into the contenteditable layer.
         """
-        ta = page.locator("textarea[name='game[body]'], textarea.redactor_source").first
-        if not ta.count():
-            self.dump(page, f"editor_no_textarea_{context}")
-            raise ItchError(f"no description textarea found ({context}; dumped editor_no_textarea_{context}.html)")
-        # 1. source toggle
-        toggle = page.locator(".redactor-toolbar a[title*='ource'], .redactor-toolbar .re-source, .redactor-box a[title*='ource'], .toolbar a[title*='Source']").first
+        box = page.locator("div.redactor-box:has(textarea[name='game[description]'])").first
+        if not box.count():
+            self.dump(page, f"editor_no_box_{context}")
+            raise ItchError(f"no redactor box for the description ({context})")
+        toggle = box.locator(".re-html").first
+        source = box.locator("textarea").locator("visible=true").first
         if toggle.count():
             try:
                 toggle.click()
-                page.wait_for_timeout(600)
-                ta.fill(text)
-                toggle.click()  # back to visual
-                return
-            except PWTimeout:
+                source.wait_for(state="visible", timeout=5_000)
+                source.fill(text)
+                toggle.click()  # back to visual -- parses the source into the layer
+                page.wait_for_timeout(400)
+            except (PWTimeout, Exception):
                 pass
-        # 2. Redactor JS API
-        ok = page.evaluate(
-            """(text) => {
-                 try {
-                   if (!window.jQuery || !jQuery.fn.redactor) return false;
-                   const $el = jQuery('textarea[name="game[body]"]');
-                   if (!$el.length) return false;
-                   $el.redactor('code.set', text);
-                   $el.redactor('sync');
-                   return true;
-                 } catch (e) { return String(e); }
-               }""",
-            text,
+        # verify the hidden backing textarea actually carries our text
+        synced = page.evaluate(
+            """() => {
+                 const ta = document.querySelector("textarea[name='game[description]']");
+                 return ta ? ta.value : null;
+               }"""
         )
-        if ok is True:
+        if synced == text:
             return
-        # 3. raw textarea + events (redactor syncs from textarea on submit in some versions)
-        page.evaluate(
-            """(text) => {
-                 const ta = document.querySelector('textarea[name="game[body]"]');
-                 if (!ta) return;
-                 ta.value = text;
-                 ta.dispatchEvent(new Event('input', {bubbles: true}));
-                 ta.dispatchEvent(new Event('change', {bubbles: true}));
-               }""",
-            text,
+        # fallback: type into the contenteditable layer (redactor syncs it live)
+        layer = box.locator(".redactor-layer").first
+        layer.click()
+        page.keyboard.press("Control+a")
+        page.keyboard.press("Delete")
+        page.keyboard.insert_text(text)
+        page.wait_for_timeout(400)
+        synced = page.evaluate(
+            """() => {
+                 const ta = document.querySelector("textarea[name='game[description]']");
+                 return ta ? ta.value : null;
+               }"""
         )
-        if ok is not False:
-            self.dump(page, f"editor_js_error_{context}")
+        if synced != text:
+            self.dump(page, f"editor_not_synced_{context}")
+            raise ItchError(
+                f"description editor did not take the text ({context}; got {len(synced or '')} chars, "
+                f"wanted {len(text)}; dumped editor_not_synced_{context}.html)"
+            )
 
     def _goto_edit(self, page: Page, game_id: int) -> None:
         self.goto(f"{self.base}/game/edit/{game_id}")
@@ -519,25 +526,44 @@ class ItchWeb:
         page.wait_for_selector("input[name='game[title]']", timeout=20_000)
 
     def set_kind_html(self, game_id: int) -> dict[str, Any]:
-        """On /game/edit/<id>: 'Kind of project' row -> select HTML (plays in browser) -> save."""
+        """On /game/edit/<id>: 'Kind of project' (a selectize'd <select name='game[type]'>)
+        -> pick HTML -- plays in browser -> save."""
         page = self.page
         self._goto_edit(page, game_id)
-        radio = page.locator("input[name='game[kind]'][value='html']").first
-        if not radio.count():
-            self.dump(page, f"kind_no_radio_{game_id}")
-            raise ItchError(f"no game[kind]=html radio on edit page {game_id} (dumped kind_no_radio_{game_id}.html)")
-        # the input is visually hidden behind a styled label -- click the label
-        label = page.locator("label:has(input[name='game[kind]'][value='html'])").first
-        (label if label.count() else radio).click()
+        sel = page.locator("select[name='game[type]']").first
+        if not sel.count():
+            self.dump(page, f"kind_no_select_{game_id}")
+            raise ItchError(f"no game[type] select on edit page {game_id} (dumped kind_no_select_{game_id}.html)")
+        # selectize hides the <select>; drive its visible UI, fall back to JS
+        done = False
+        try:
+            control = page.locator(".selectize-control").first
+            control.click()
+            opt = page.locator(".selectize-dropdown .option[data-value='html'], .selectize-dropdown-content .option[data-value='html']").first
+            opt.wait_for(state="visible", timeout=5_000)
+            opt.click()
+            done = True
+        except (PWTimeout, Exception):
+            pass
+        if not done:
+            page.evaluate(
+                """() => {
+                     const s = document.querySelector("select[name='game[type]']");
+                     s.value = 'html';
+                     s.dispatchEvent(new Event('change', {bubbles: true}));
+                   }"""
+            )
         page.wait_for_timeout(400)  # let the HTML options (viewport etc.) unfold
         self._save_button(page, context="kind").click()
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(800)
         self._goto_edit(page, game_id)
-        checked = page.locator("input[name='game[kind]'][value='html']").first.is_checked()
-        if not checked:
+        value = page.evaluate(
+            """() => document.querySelector("select[name='game[type]']")?.value || null"""
+        )
+        if value != "html":
             self.dump(page, f"kind_not_applied_{game_id}")
-            raise ItchError(f"kind=html did not stick on {game_id} (dumped kind_not_applied_{game_id}.html)")
+            raise ItchError(f"kind=html did not stick on {game_id} (select value {value!r}; dumped kind_not_applied_{game_id}.html)")
         return {"id": game_id, "kind": "html"}
 
     def edit_description(self, game_id: int, markdown: str) -> dict[str, Any]:

@@ -229,8 +229,18 @@ def api_post(url, payload, token=None, timeout=400):
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        if exc.code in (502, 504) and "nvidia" not in url:
+            raise
+        if exc.code not in (502, 504, 429):
+            raise
+        time.sleep(20)
+        req2 = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
+        with urllib.request.urlopen(req2, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
 
 
 def tg_send(cfg, text, chat_id=None):
@@ -634,20 +644,41 @@ def deploy_buttons(order_id):
 
 # -------------------------------------------------------------- feedback LLM ---
 
+
+def _boss_call(cfg, payload):
+    """Boss endpoint with acting-boss degradation: if the primary LLM gateway
+    times out twice (free-tier 504s), the worker model takes the desk with the
+    same instructions — the Pipeline never stalls on one dead endpoint."""
+    for attempt in range(2):
+        try:
+            return api_post(LLM_URL, payload, token=cfg["nvapi_key"])
+        except Exception as exc:  # noqa: BLE001
+            print(f"boss endpoint failed (attempt {attempt + 1}): {exc}", flush=True)
+            time.sleep(15)
+    print("DEGRADED: worker as acting boss", flush=True)
+    try:
+        takeover = dict(payload)
+        takeover["model"] = WORKER_MODEL  # glm-5.3 is paid on openrouter — route to the free worker model
+        takeover.pop("chat_template_kwargs", None)
+        return api_post(WORKER_URL, takeover, token=cfg.get("openrouter_key", ""))
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"boss and worker endpoints both unreachable: {exc}")
+
+
 def llm_boss(cfg, messages):
     """BOSS tier — glm-5.3 on the NVIDIA free tier: a reasoning model that can
     take minutes and may return content=null with only reasoning_content. Big
     budget, long timeout, and a final-answer nudge when the content comes back
     empty. Triages, reviews the worker drafts, owns the last word."""
     for nudge in range(2):
-        data = api_post(LLM_URL, {
+        data = _boss_call(cfg, {
             "model": LLM_MODEL,
             "messages": messages,
             "temperature": 0.3,
             "top_p": 0.9,
             "max_tokens": 4096,
             "chat_template_kwargs": {"thinking": False},
-        }, token=cfg["nvapi_key"])
+        })
         choice = data["choices"][0]
         content = choice["message"].get("content") or ""
         if content.strip():
@@ -1800,8 +1831,26 @@ def main(argv=None):
     ap.add_argument("--selftest", action="store_true",
                     help="exercise parsing, the session FSM and upload routing "
                          "offline (no network) and exit")
+    ap.add_argument("--inject", metavar="TEXT", default="",
+                    help="dev: process TEXT as if the owner sent it via Telegram, then exit")
     args = ap.parse_args(argv)
 
+    if args.inject:
+        cfg = load_config()
+        repo = cfg.get("repo_dir") or REPO_DEFAULT
+        msg = {"chat": {"id": int(cfg.get("chat_id", 0) or 0)},
+               "from": {"id": int(cfg.get("chat_id", 0) or 0), "first_name": "Owner-Inject"},
+               "text": args.inject}
+        try:
+            handle_message(cfg, repo, load_state(), msg)
+        except Exception as exc:  # noqa: BLE001 — report, never die silently
+            print("inject run failed:", exc, flush=True)
+            try:
+                tg_send(cfg, f"⚠️ The crew hit a snag processing that: {str(exc)[:300]}")
+            except Exception:
+                pass
+        sys.exit(0)
+        sys.exit(0)
     if args.selftest:
         return selftest()
 
