@@ -1,0 +1,90 @@
+version: "3.8"
+
+# The complete Game Making Pipeline, running on retromonkey.
+# Everything: cloud_editor poll, daily remake, Godot gates, PlayerOne.
+# The only thing that stays on Rog is Claude Code (the /gmp skill manager).
+
+services:
+  # === THE POLL LOOP ===
+  # Telegram feedback → brain chain → gates → deploy → reply
+  pipeline:
+    build: ./pipeline
+    container_name: gmp-pipeline
+    restart: unless-stopped
+    environment:
+      - TG_TOKEN=${TG_TOKEN}
+      - NVAPI_KEY=${NVAPI_KEY}
+      - OPENROUTER_KEY=${OPENROUTER_KEY}
+      - CHAT_ID=${CHAT_ID}
+      - GAMES_TOKEN=${GAMES_TOKEN}
+      - GODOT_BIN=/usr/local/bin/godot
+      - RUNTIME_DIR=/app/runtime
+      - CLOUD=1
+    volumes:
+      - pipeline_state:/app/runtime
+      - pipeline_repo:/app/games
+    depends_on:
+      - godot
+    networks:
+      - web
+
+  # === GODOT HEADLESS ===
+  # The gate wall runner — shared by pipeline and daily remake
+  godot:
+    image: barichello/godot-ci:4.7.1
+    container_name: gmp-godot
+    entrypoint: ["sleep", "infinity"]
+    restart: unless-stopped
+    volumes:
+      - pipeline_repo:/games
+    networks:
+      - web
+
+  # === DAILY REMAKE CRON ===
+  # One game per day from the backlog
+  daily:
+    build: ./pipeline
+    container_name: gmp-daily
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        python3 daily/daily_remake.py &&
+        python3 daily/itch_feedback.py &&
+        python3 daily/itch_feedback.py --close-loop;
+        sleep 1800;
+      done"
+    environment:
+      - TG_TOKEN=${TG_TOKEN}
+      - NVAPI_KEY=${NVAPI_KEY}
+      - OPENROUTER_KEY=${OPENROUTER_KEY}
+      - CHAT_ID=${CHAT_ID}
+      - GAMES_TOKEN=${GAMES_TOKEN}
+      - GODOT_BIN=/usr/local/bin/godot
+      - WORK_ROOT=/app/games
+    volumes:
+      - pipeline_state:/app/runtime
+      - pipeline_repo:/app/games
+    depends_on:
+      - godot
+    networks:
+      - web
+
+  # === PLAYERONE INFERENCE (optional, deploy when model is production-ready) ===
+  # playerone:
+  #   build: ./playerone
+  #   container_name: gmp-playerone
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:9090:9090"
+  #   networks:
+  #     - web
+
+volumes:
+  pipeline_state:
+    driver: local
+  pipeline_repo:
+    driver: local
+
+networks:
+  web:
+    external: true
