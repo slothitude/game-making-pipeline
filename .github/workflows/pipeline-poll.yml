@@ -52,3 +52,18 @@ jobs:
               curl -s -X POST -H "Authorization: Bearer ${GAMES_TOKEN}" \n                -H "Accept: application/vnd.github+json" \n                https://api.github.com/repos/slothitude/game-making-pipeline/actions/workflows/new-game.yml/dispatches \n                -d "{\"ref\":\"main\",\"inputs\":{\"order_file\":\"$NAME\"}}"
             fi
           done
+
+      - name: Intelligent forking — dispatch edit-fork for pending fixes
+        env:
+          GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+        run: |
+          for f in runtime/feedback/*.json; do
+            [ -f "$f" ] || continue
+            STATUS=$(jq -r '.status // "pending"' "$f" 2>/dev/null || echo pending)
+            GAME=$(jq -r '.meta.game // .game // "octogram-arcade"' "$f" 2>/dev/null)
+            if [ "$STATUS" = "pending" ]; then
+              NAME=$(basename "$f")
+              echo "Dispatching edit-fork for $GAME / $NAME"
+              curl -s -X POST -H "Authorization: Bearer ${GAMES_TOKEN}" \n                -H "Accept: application/vnd.github+json" \n                https://api.github.com/repos/slothitude/game-making-pipeline/actions/workflows/edit-fork.yml/dispatches \n                -d "{\"ref\":\"main\",\"inputs\":{\"game\":\"$GAME\",\"order_file\":\"$NAME\"}}"
+            fi
+          done
