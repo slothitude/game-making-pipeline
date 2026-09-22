@@ -1,0 +1,4 @@
+# Secrets and browser session state — never commit
+session/
+debug/
+__pycache__/

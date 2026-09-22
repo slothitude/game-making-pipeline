@@ -92,4 +92,10 @@ Slice B green on the double — the signature systems live: mount an agent and f
 
 ![Star Visitor: the alien rides](images/day2_star_visitor_agent.png)
 
+---
+
+## 2026-09-22 13:32 — Every game gets its lore
+
+Each project now keeps its own diary (per-phase, gate-linked), its own LORE.md written in-world, and devlog sketches in the Oddworld tradition — instructions as artifacts: a diver's logbook page, a slug almanac, a redacted incident report, a pilot's letter, a storybook page of the Word Ocean. Sketches generate per milestone via journal/sketch.py.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*
