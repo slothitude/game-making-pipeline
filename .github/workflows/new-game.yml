@@ -1,0 +1,134 @@
+name: New Game Factory
+
+# Consumes a pending new_game work order: instantiates the player's game from
+# the arcade template, runs the full gate wall, deploys it into the hub, and
+# replies to the player on Telegram. Dispatched by pipeline-poll when it sees
+# a pending order (and manually for testing).
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_file:
+        description: "Path to the order JSON under runtime/orders/ (e.g. 20260922-101500.json)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Instantiate + gate + deploy player game
+    runs-on: ubuntu-latest
+    container:
+      image: docker://barichello/godot-ci:4.7.1
+    env:
+      ORDER_FILE: ${{ inputs.order_file }}
+      GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+    steps:
+      - name: Install prerequisites (godot image is minimal)
+        run: apt-get update && apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig jq curl
+
+      - name: Checkout GMP (orders + instantiate + hub live here)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GAMES_TOKEN }}
+
+      - name: Read order
+        id: order
+        run: |
+          set -e
+          ORDER="$(cat "runtime/orders/${ORDER_FILE}")"
+          echo "template=$(echo "$ORDER" | jq -r .template)" >> "$GITHUB_OUTPUT"
+          echo "title=$(echo "$ORDER" | jq -r .title)" >> "$GITHUB_OUTPUT"
+          echo "slug=$(echo "$ORDER" | jq -r .slug)" >> "$GITHUB_OUTPUT"
+          echo "owner=$(echo "$ORDER" | jq -r .from_telegram_id)" >> "$GITHUB_OUTPUT"
+          echo "chat_id=$(echo "$ORDER" | jq -r .chat_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout game template repo into ./arcade
+        uses: actions/checkout@v4
+        with:
+          repository: slothitude/octogram-arcade
+          ref: main
+          token: ${{ secrets.GAMES_TOKEN }}
+          path: arcade
+
+      - name: Instantiate (copy + rebrand + import)
+        env:
+          GODOT_BIN: godot
+        run: |
+          set -e
+          mkdir -p staging staging-out
+          python3 instantiate/instantiate_new_game.py \
+            --order runtime/orders/${ORDER_FILE} \
+            --template-dir "$GITHUB_WORKSPACE/arcade" \
+            --out staging
+
+      - name: Run the gate wall (7 suites) — nothing deploys past a red wall
+        run: |
+          set -e
+          for suite in run_tests run_rpg_tests smoke_battle smoke_menu run_e2e run8_tests run8_e2e; do
+            echo "::group::gate: ${suite}"
+            godot --headless --path staging --script "res://tests/${suite}.gd"
+            echo "::endgroup::"
+          done
+
+      - name: Export Web
+        env:
+          GODOT_BIN: godot
+        run: godot --headless --path staging --export-release "Web"
+
+      - name: Publish into the hub (games/<owner>-<slug>/ + index)
+        run: |
+          set -e
+          OWNER="${{ steps.order.outputs.owner }}"
+          SLUG="${{ steps.order.outputs.slug }}"
+          TITLE="${{ steps.order.outputs.title }}"
+          DEST="games/${OWNER}-${SLUG}"
+          mkdir -p "$DEST"
+          cp staging/build/web/index.html staging/build/web/index.js staging/build/web/index.pck \
+             staging/build/web/index.wasm staging/build/web/index.service.worker.js \
+             staging/build/web/index.manifest.json staging/build/web/*.png "$DEST/" 2>/dev/null || true
+          cp staging-out/hub_bundle/game.json "$DEST/game.json" 2>/dev/null || true
+          jq --arg owner "$OWNER" --arg title "$TITLE" --arg url "${DEST}/" --arg slug "$SLUG" \
+             '. += [{"owner_id": $owner, "title": $title, "slug": $slug, "url": $url, "updated": (now | todate)}]' \
+             games/index.json > games/index.json.tmp && mv games/index.json.tmp games/index.json
+          git config user.name gmp-factory
+          git config user.email actions@users.noreply.github.com
+          git add games/
+          git commit -m "factory: publish ${TITLE} (${DEST})"
+          git push
+
+      - name: Reply to the player on Telegram
+        run: |
+          CHAT="${{ steps.order.outputs.chat_id }}"
+          TITLE="${{ steps.order.outputs.title }}"
+          URL="https://slothitude.github.io/game-making-pipeline/games/${{ steps.order.outputs.owner }}-${{ steps.order.outputs.slug }}/"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="$CHAT" \
+            -d text="✅ ${TITLE} is LIVE: ${URL} — tell me any time what to change!"
+          # mirror to the owner review channel
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="5597932516" \
+            -d text="[factory] deployed ${TITLE} -> ${URL}"
+
+      - name: Mark the order done (runtime commit)
+        run: |
+          set -e
+          jq '.status = "done"' "runtime/orders/${ORDER_FILE}" > tmp.json && mv tmp.json "runtime/orders/${ORDER_FILE}"
+          git config user.name gmp-factory
+          git config user.email actions@users.noreply.github.com
+          git add runtime/orders/
+          git commit -m "runtime: order ${ORDER_FILE} done" || true
+          git push
+
+      - name: On failure — tell both sides
+        if: failure()
+        run: |
+          CHAT="${{ steps.order.outputs.chat_id }}"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="5597932516" \
+            -d text="[factory] FAILED building order ${ORDER_FILE} — check the run log"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="$CHAT" \
+            -d text="⚠️ Couldn't build that one — the makers have been notified." || true

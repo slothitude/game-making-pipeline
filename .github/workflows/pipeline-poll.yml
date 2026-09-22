@@ -38,3 +38,17 @@ jobs:
           git add runtime/ 2>/dev/null || true
           git diff --cached --quiet || git commit -m "runtime state update"
           git push
+
+      - name: New-game order detection (finish the loop)
+        env:
+          GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+        run: |
+          for f in runtime/orders/*.json; do
+            [ -f "$f" ] || continue
+            STATUS=$(jq -r .status "$f" 2>/dev/null || echo missing)
+            if [ "$STATUS" = "pending" ]; then
+              NAME=$(basename "$f")
+              echo "Dispatching new-game.yml for $NAME"
+              curl -s -X POST -H "Authorization: Bearer ${GAMES_TOKEN}" \n                -H "Accept: application/vnd.github+json" \n                https://api.github.com/repos/slothitude/game-making-pipeline/actions/workflows/new-game.yml/dispatches \n                -d "{\"ref\":\"main\",\"inputs\":{\"order_file\":\"$NAME\"}}"
+            fi
+          done
