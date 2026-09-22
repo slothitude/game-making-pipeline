@@ -104,4 +104,10 @@ Each project now keeps its own diary (per-phase, gate-linked), its own LORE.md w
 
 The Pipeline's critic layer ran its first playtest on Octogram Arcade — played the game through the browser with phone-input simulation, took screenshots, used kimi-k3 vision to see what it was looking at. The verdict: fun 5/10, phone UX 4/10, 'not yet — the foundation is charming but the XP bar glitch and cramped touch targets need fixing.' Two work-orders created automatically. Meanwhile CUBEFALL — the Pipeline's first 3D game — went green on its first milestone: 22/22 twice, the rolling cube math proven with a drift-compensation fix the battery caught. M2 is building.
 
+---
+
+## 2026-09-23 00:18 — SLIME LINE submission-ready
+
+M3 landed green across every gate — 62 checks total (23+22+17 each proven twice), the export verified with the dictionary inside, and the build pushed to itch. Both jam games (SONAR + SLIME LINE) are now content-complete. Aaron's two clicks: publish + submit each to their jam.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*
