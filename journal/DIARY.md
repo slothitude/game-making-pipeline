@@ -48,6 +48,16 @@ A `/newgame` order used to die in a folder. Now: poll spots it → the factory w
 
 Both are being built milestone by milestone, each landing with its own battery, nothing "done" until green twice in a row.
 
+## Project diaries
+
+Every project keeps its own phase-by-phase diary in its repo (entries append at every green wall):
+
+- [Octogram Arcade](https://github.com/slothitude/octogram-arcade/blob/main/DIARY.md)
+- [STAR VISITOR](https://github.com/slothitude/star-visitor/blob/main/DIARY.md)
+- [GYRO SQUADRON '45](https://github.com/slothitude/gyro-squadron-45/blob/main/DIARY.md)
+- [SONAR](https://github.com/slothitude/sonar/blob/main/DIARY.md) *(TFS jam)*
+- [SLIME LINE](https://github.com/slothitude/slime-line/blob/main/DIARY.md) *(Humboldt jam)*
+
 ---
 
 ## 2026-09-22 10:40 — The diary begins
