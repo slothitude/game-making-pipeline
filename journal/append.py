@@ -20,8 +20,9 @@ FOOTER_MARKER = "*Next entries write themselves"
 def append(title: str, body: str, image: str = "") -> None:
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"## {stamp} — {title}", "", body.strip(), ""]
-    if image and os.path.exists(os.path.join(HERE, "..", image)):
-        lines += [f"![{title}](../{image})", ""]
+    image = image[len("journal/"):] if image.startswith("journal/") else image
+    if image and os.path.exists(os.path.join(HERE, image)):
+        lines += [f"![{title}]({image})", ""]
     entry = "\n".join(lines)
     text = open(DIARY, encoding="utf-8").read()
     if FOOTER_MARKER in text:

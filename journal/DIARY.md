@@ -60,7 +60,7 @@ The Pipeline started keeping this journal — entries append as games are born, 
 
 Milestone 2 landed green on the double — four weapon tiers, the charge Super, bombs, two enemy brains, the fortress boss in two phases, a 55-second stage with escalating waves and a clear tally. The tilt core from M1 carried it all; every number lives in feel.gd.
 
-![Gyro Squadron: Act 1 flies](../journal/images/day2_gyro_boss.png)
+![Gyro Squadron: Act 1 flies](images/day2_gyro_boss.png)
 
 ---
 
