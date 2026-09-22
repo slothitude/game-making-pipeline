@@ -98,4 +98,10 @@ Slice B green on the double — the signature systems live: mount an agent and f
 
 Each project now keeps its own diary (per-phase, gate-linked), its own LORE.md written in-world, and devlog sketches in the Oddworld tradition — instructions as artifacts: a diver's logbook page, a slug almanac, a redacted incident report, a pilot's letter, a storybook page of the Word Ocean. Sketches generate per milestone via journal/sketch.py.
 
+---
+
+## 2026-09-22 23:39 — The critic plays
+
+The Pipeline's critic layer ran its first playtest on Octogram Arcade — played the game through the browser with phone-input simulation, took screenshots, used kimi-k3 vision to see what it was looking at. The verdict: fun 5/10, phone UX 4/10, 'not yet — the foundation is charming but the XP bar glitch and cramped touch targets need fixing.' Two work-orders created automatically. Meanwhile CUBEFALL — the Pipeline's first 3D game — went green on its first milestone: 22/22 twice, the rolling cube math proven with a drift-compensation fix the battery caught. M2 is building.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*
