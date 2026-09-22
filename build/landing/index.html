@@ -1,0 +1,57 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>slothitude games — The Game Making Pipeline</title><style>
+*{box-sizing:border-box} body{margin:0;background:#0a1220;color:#dfe8f5;font-family:Georgia,serif;line-height:1.6}
+.hero{min-height:92vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+padding:40px 20px;background:radial-gradient(ellipse at 50% 120%,#12325e 0%,#0a1220 60%)}
+.hero h1{font-size:clamp(28px,7vw,64px);color:#ffd76e;margin:0;letter-spacing:3px;text-shadow:0 3px 0 #1b2b45}
+.hero .sub{color:#8fd0ff;font-size:clamp(15px,2.5vw,22px);margin-top:10px;font-style:italic}
+.hero .desc{max-width:620px;margin:22px auto 0;color:#b9c9e2}
+.pipe{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:30px}
+.pipe span{border:1px solid #33507c;border-radius:16px;padding:7px 14px;font-size:13px;color:#9db4d8}
+.cta{margin-top:34px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.cta a{background:#ffd76e;color:#101a2c;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:24px;
+box-shadow:0 4px 0 #8a6d1a}
+.cta a.alt{background:transparent;color:#8fd0ff;border:1px solid #33507c;box-shadow:none}
+section{max-width:1000px;margin:0 auto;padding:56px 20px}
+h2{color:#8fd0ff;letter-spacing:2px;border-bottom:2px solid #33507c;padding-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px;margin-top:28px}
+.card{background:#101c30;border:1px solid #33507c;border-radius:14px;overflow:hidden;transition:transform .15s}
+.card:hover{transform:translateY(-4px)}
+.cardart img{width:100%;display:block;max-height:210px;object-fit:contain;background:#0d1626}
+.cardbody{padding:16px}.cardbody h3{color:#ffd76e;margin:0 0 6px}.cardbody p{color:#b9c9e2;font-size:14px;margin:0 0 12px}
+.play{color:#8fd0ff;text-decoration:none;font-size:13px;letter-spacing:1px}
+.story p{color:#b9c9e2;max-width:720px}
+footer{text-align:center;color:#5d6f92;font-size:12px;padding:50px 20px;border-top:1px solid #1b2b45}
+footer a{color:#8fd0ff}
+</style></head><body>
+<div class="hero"><h1>THE GAME MAKING PIPELINE</h1>
+<div class="sub">slothitude games · feedback in, games out</div>
+<p class="desc">One machine makes all our games: you say what you want — in the games, on Telegram, from the hub —
+an AI boss plans it, AI workers build it, a wall of hundreds of automated tests judges it,
+and it ships to your browser. Every game below was made and is improved this way.
+<a href="#diary" style="color:#8fd0ff">The diary tells the whole story.</a></p>
+<div class="pipe"><span>💬 Telegram feedback</span><span>🧠 glm-5.3 boss</span><span>⚡ openrouter workers</span>
+<span>🎨 Flux art</span><span>🧪 863-check gate wall</span><span>🚀 GitHub Pages + itch</span></div>
+<div class="cta"><a href="#games">PLAY THE GAMES</a><a class="alt" href="#diary">READ THE DIARY</a></div></div>
+<section id="games"><h2>THE GAMES</h2><div class="grid"><div class="card"><div class="cardart"></div>
+    <div class="cardbody"><h3>SONAR</h3><p>A submarine in black water that sees only by pinging. The things below hunt the sound.</p>
+    <a class="play" href="https://slothitude.itch.io/sonar" target="_blank" rel="noopener">PLAY ON ITCH →</a></div></div><div class="card"><div class="cardart"></div>
+    <div class="cardbody"><h3>SLIME LINE</h3><p>A tilt-glide slug, a glowing trail, letter-bugs to eat, words to spell.</p>
+    <a class="play" href="https://slothitude.itch.io/slime-line" target="_blank" rel="noopener">PLAY ON ITCH →</a></div></div><div class="card"><div class="cardart"></div>
+    <div class="cardbody"><h3>STAR VISITOR</h3><p>Ride enemies. Burrow the field. Spell with style.</p>
+    <a class="play" href="https://slothitude.itch.io/star-visitor" target="_blank" rel="noopener">PLAY ON ITCH →</a></div></div><div class="card"><div class="cardart"></div>
+    <div class="cardbody"><h3>GYRO SQUADRON '45</h3><p>Tilt-steered shooter: WWII propellers versus the weather that shoots back.</p>
+    <a class="play" href="https://slothitude.itch.io/gyro-squadron-45" target="_blank" rel="noopener">PLAY ON ITCH →</a></div></div><div class="card"><div class="cardart"><img src="card_octogram-arcade.png" alt="OCTOGRAM ARCADE"></div>
+    <div class="cardbody"><h3>OCTOGRAM ARCADE</h3><p>Three word games in one: Word Poker arena, a spell-casting campaign, Eight Letters.</p>
+    <a class="play" href="https://slothitude.itch.io/octogram-arcade" target="_blank" rel="noopener">PLAY ON ITCH →</a></div></div></div></section>
+<section class="story"><h2>HOW IT WORKS</h2>
+<p>Every game keeps a diary — how it got made, the ideas, the sketches, the lore — updated at every milestone by the machine that made it.
+Every change to a live game must pass its own test wall before it ships: green twice in a row, or it doesn't deploy.
+The games talk back: an in-game FEEDBACK button sends your words straight into the Pipeline, and the next deployed
+build answers you.</p></section>
+<section id="diary"><h2>THE DIARY</h2>
+<p style="color:#b9c9e2">The full adventure log lives at the
+<a href="https://slothitude.github.io/game-making-pipeline/" style="color:#8fd0ff">Pipeline hub</a> and in each game's repo.
+The complete diary site also runs right here — scroll the same pages the machines wrote.</p></section>
+<footer>the Game Making Pipeline · glm-5.3 boss · openrouter workers · Flux · Godot · GitHub Actions · Telegram · itch.io<br>
+<a href="https://slothitude.itch.io">slothitude.itch.io</a></footer></body></html>
