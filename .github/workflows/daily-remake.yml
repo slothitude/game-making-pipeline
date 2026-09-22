@@ -1,0 +1,69 @@
+name: Daily Remake
+
+# The Pipeline's heartbeat: one 90s/flash remake per day, built entirely in the
+# cloud (owner directive: "set at one every day" + "with github actions").
+# Picks the next journal/BACKLOG.md entry, the boss/worker brain chain writes
+# M1, the godot gate wall judges, Telegram announces. Manual override:
+#   gh workflow run daily-remake.yml -f game_name=skifree
+
+on:
+  schedule:
+    - cron: "23 10 * * *"   # daily; off-minute by law
+  workflow_dispatch:
+    inputs:
+      game_name:
+        description: "Override dir name for today's remake (default: remake-<backlog#>)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: One game a day
+    runs-on: ubuntu-latest
+    container:
+      image: docker://barichello/godot-ci:4.7.1
+    env:
+      NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+      GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}
+      GODOT_BIN: godot
+      GAME_NAME: ${{ inputs.game_name }}
+    steps:
+      - name: Install prerequisites (godot image is minimal)
+        run: apt-get update && apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig
+
+      - name: Checkout GMP (backlog lives here)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GAMES_TOKEN }}
+
+      - name: Build today's remake (brain chain + gate wall)
+        run: python3 daily/daily_remake.py
+
+      - name: Ship what exists (even partial — the diary records it)
+        if: always()
+        run: |
+          set -e
+          NAME="${GAME_NAME:-}"
+          if [ -z "$NAME" ]; then
+            NAME="$(python3 - <<'PY'
+import re
+text = open("journal/BACKLOG.md", encoding="utf-8").read()
+m = re.search(r"^\|\s*(\d+)\s*\|", text, re.M)
+print("remake-" + m.group(1) if m else "remake-x")
+PY
+)"
+          fi
+          if [ -d "/tmp/remakes/$NAME" ] && [ -n "$(ls -A /tmp/remakes/$NAME 2>/dev/null)" ]; then
+            cd "/tmp/remakes/$NAME"
+            git init -q -b main 2>/dev/null || true
+            git add -A
+            git -c user.name=gmp-daily -c user.email=actions@users.noreply.github.com \
+              commit -q -m "daily remake: $NAME (auto-built)" || true
+            git remote add origin "https://x-access-token:${GAMES_TOKEN}@github.com/slothitude/$NAME.git" 2>/dev/null || true
+            git push -q -f origin main || echo "push failed (repo may need creating)"
+          fi

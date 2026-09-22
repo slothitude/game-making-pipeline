@@ -436,21 +436,46 @@ class ItchWeb:
             (lbl if lbl.count() else draft).click()
         if description_md:
             self._set_editor(page, description_md, context="create")
-        self._save_button(page, context="create").click()
-        # After save we land on /game/edit/<id> (or the project page).
-        deadline = time.time() + 30
-        m = None
-        while time.time() < deadline:
-            m = re.search(r"/game/edit/(\d+)", page.url)
+        save_btn = self._save_button(page, context="create")
+        game_id: int | None = None
+        try:
+            with page.expect_response(
+                lambda r: r.request.method == "POST" and "/game/new" in r.url, timeout=45_000
+            ) as ri:
+                save_btn.click()
+            loc = ri.value.headers.get("location", "") or ""
+            m = re.search(r"/game/edit/(\d+)", loc)
             if m:
-                break
-            time.sleep(0.5)
-        if m is None:
+                game_id = int(m.group(1))
+        except PWTimeout:
+            pass  # fall through to the landed-page scrape below
+        if game_id is None:
+            # no id from the redirect -- scrape ONLY the page we landed on (its
+            # owner-tools bar carries /game/edit/<id>); never a page we navigated
+            # to ourselves, or we might read another game's id.
+            deadline = time.time() + 20
+            while time.time() < deadline and game_id is None:
+                if "/game/new" not in page.url:
+                    game_id = self._scrape_game_id(page)
+                time.sleep(0.5)
+        if game_id is None and slug:
+            # last resort: the dashboard list (may lag for a fresh project)
+            deadline = time.time() + 60
+            while time.time() < deadline and game_id is None:
+                try:
+                    for row in self.list_projects():
+                        if row["url_slug"] == slug or row["title"].strip().lower() == title.strip().lower():
+                            game_id = row["id"]
+                            break
+                except Exception:
+                    pass
+                if game_id is None:
+                    time.sleep(4)
+        if game_id is None:
             self.dump(page, "create_no_redirect")
-            raise ItchError(f"save did not lead to /game/edit/<id> (at {page.url})")
-        game_id = int(m.group(1))
+            raise ItchError(f"save did not lead to an editable project (at {page.url})")
         # verify the edit page actually loads
-        page.wait_for_selector("input[name='game[title]']", timeout=20_000)
+        self._goto_edit(page, game_id)
         url = f"{self.games_base}/{slug}" if slug else None
         return {"id": game_id, "url": url, "edit_url": f"{self.base}/game/edit/{game_id}"}
 
@@ -494,20 +519,24 @@ class ItchWeb:
                 pass
 
         def synced_value() -> str | None:
+            # read the synced value AS RENDERED TEXT: decode entities (&#39; etc.)
+            # and drop tags in one go via a detached div's textContent
             return page.evaluate(
                 """(name) => {
                      const ta = document.querySelector(`textarea[name='${name}']`);
-                     return ta ? ta.value : null;
+                     if (!ta) return null;
+                     const d = document.createElement('div');
+                     d.innerHTML = ta.value;
+                     return d.textContent;
                    }""",
                 textarea_name,
             )
 
         def norm(s: str | None) -> str:
-            """Redactor rewrites what we type (it auto-links bare URLs, wraps
-            paragraphs), so compare tag-stripped, whitespace-collapsed text.
-            Tags become spaces so paragraph splits don't glue words together."""
+            # Redactor's paragraphing/inline tags make whitespace unpredictable,
+            # so verify content with every whitespace byte stripped.
             import re as _re
-            return _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", s or "")).strip()
+            return _re.sub(r"\s+", "", s or "")
 
         want = norm(text)
         got = norm(synced_value())
@@ -528,6 +557,26 @@ class ItchWeb:
                 f"wanted {want[:120]!r}; dumped editor_not_synced_{context}.html)"
             )
 
+    @staticmethod
+    def _scrape_game_id(page: Page) -> int | None:
+        """Find a game id in the current page (owner edit link, data attribute, embed)."""
+        try:
+            return page.evaluate(
+                """() => {
+                     const a = document.querySelector("a[href*='/game/edit/']");
+                     if (a) {
+                       const m = a.href.match(/\\/game\\/edit\\/(\\d+)/);
+                       if (m) return parseInt(m[1], 10);
+                     }
+                     const el = document.querySelector("[data-game_id]");
+                     if (el) { const v = parseInt(el.getAttribute('data-game_id'), 10); if (v) return v; }
+                     const m2 = (document.body.innerHTML || '').match(/game_id=(\\d+)/);
+                     return m2 ? parseInt(m2[1], 10) : null;
+                   }"""
+            )
+        except Exception:
+            return None
+
     def post_devlog(self, game_id: int, title: str, body_markdown: str,
                     image_path: str | None = None, classification: str = "general_update",
                     publish: bool = True) -> dict[str, Any]:
@@ -538,8 +587,15 @@ class ItchWeb:
         (UNCHECKED by default -- a plain Save yields a draft post), cover image
         via the #image-uploader-0 button (lazy file input), submit is a plain
         <button class="button">Save</button>.
+
+        Idempotent: if a post with this exact title already exists on the game's
+        devlog index, nothing is posted and {"skipped": true} is returned.
         """
         page = self.page
+        self.goto(f"{self.base}/dashboard/game/{game_id}/devlog")
+        page.wait_for_timeout(600)
+        if page.evaluate("(t) => document.body.innerText.includes(t)", title):
+            return {"game_id": game_id, "title": title, "skipped": True, "published": False}
         self.goto(f"{self.base}/dashboard/game/{game_id}/new-devlog")
         page.wait_for_selector("input[name='post[title]']", timeout=20_000)
         title_field = page.locator("input[name='post[title]']").first
@@ -616,33 +672,28 @@ class ItchWeb:
         page.wait_for_selector("input[name='game[title]']", timeout=20_000)
 
     def set_kind_html(self, game_id: int) -> dict[str, Any]:
-        """On /game/edit/<id>: 'Kind of project' (a selectize'd <select name='game[type]'>)
-        -> pick HTML -- plays in browser -> save."""
+        """On /game/edit/<id>: 'Kind of project' (a selectize'd <select name='game[type]'>
+        with options default=Downloadable / html=HTML / flash / java / unity)
+        -> pick 'html' (plays in browser) -> save."""
         page = self.page
         self._goto_edit(page, game_id)
         sel = page.locator("select[name='game[type]']").first
         if not sel.count():
             self.dump(page, f"kind_no_select_{game_id}")
             raise ItchError(f"no game[type] select on edit page {game_id} (dumped kind_no_select_{game_id}.html)")
-        # selectize hides the <select>; drive its visible UI, fall back to JS
-        done = False
-        try:
-            control = page.locator(".selectize-control").first
-            control.click()
-            opt = page.locator(".selectize-dropdown .option[data-value='html'], .selectize-dropdown-content .option[data-value='html']").first
-            opt.wait_for(state="visible", timeout=5_000)
-            opt.click()
-            done = True
-        except (PWTimeout, Exception):
-            pass
-        if not done:
-            page.evaluate(
-                """() => {
-                     const s = document.querySelector("select[name='game[type]']");
-                     s.value = 'html';
-                     s.dispatchEvent(new Event('change', {bubbles: true}));
-                   }"""
-            )
+        set_result = page.evaluate(
+            """(value) => {
+                 const el = document.querySelector("select[name='game[type]']");
+                 const s = el.selectize;
+                 if (!s) { return 'no-selectize'; }
+                 s.setValue(value);
+                 return s.getValue();
+               }""",
+            "html",
+        )
+        if set_result != "html":
+            self.dump(page, f"kind_set_failed_{game_id}")
+            raise ItchError(f"could not set kind=html via selectize (got {set_result!r}; dumped kind_set_failed_{game_id}.html)")
         page.wait_for_timeout(400)  # let the HTML options (viewport etc.) unfold
         self._save_button(page, context="kind").click()
         page.wait_for_load_state("domcontentloaded")
@@ -696,24 +747,27 @@ class ItchWeb:
         return {"id": game_id, "published": want}
 
     def list_projects(self) -> list[dict[str, Any]]:
-        """Parse /dashboard -> game titles + edit ids."""
+        """Parse /dashboard -> titles, edit ids, real url slugs, statuses."""
         page = self.page
         self.goto(self.base + "/dashboard")
-        page.wait_for_selector(".game_row, .manage_game_widget, .dashboard_game_row", timeout=20_000)
+        page.wait_for_selector(".game_row", timeout=20_000)
         rows = page.evaluate(
             """() => {
                  const out = [];
-                 const seen = new Set();
-                 for (const a of document.querySelectorAll("a[href*='/game/edit/']")) {
-                   const m = a.href.match(/\\/game\\/(?:edit|url)\\/(\\d+)/);
+                 for (const row of document.querySelectorAll('.game_row')) {
+                   const editLink = row.querySelector("a[href*='/game/edit/']");
+                   if (!editLink) continue;
+                   const m = editLink.href.match(/\\/game\\/edit\\/(\\d+)/);
                    if (!m) continue;
-                   const row = a.closest('.game_row, .manage_game_widget, .dashboard_game_row, tr, li') || a;
-                   const title = (row.querySelector('.game_title, .title, .game_name') || a).innerText.trim();
-                   const key = m[1];
-                   if (seen.has(key)) continue;
-                   seen.add(key);
-                   let pub = row.querySelector('.published_flag, .game_publish_flag, [class*=publish]');
-                   out.push({id: parseInt(key, 10), title: title, url_slug: (a.pathname || '').split('/').pop(), published: pub ? pub.innerText.trim() : ''});
+                   const pageLink = row.querySelector('a.game_link, .cover_link');
+                   const href = (pageLink && pageLink.href) || '';
+                   const slug = href.replace(/^https?:\\/\\/[^/]+\\//, '').replace(/\\/$/, '');
+                   const status = row.getAttribute('data-status') || '';
+                   const title = row.getAttribute('data-title')
+                       || (row.querySelector('.game_title') || {}).innerText
+                       || '';
+                   out.push({id: parseInt(m[1], 10), title: String(title).trim(),
+                             url_slug: slug, published: status, url: href});
                  }
                  return out;
                }"""

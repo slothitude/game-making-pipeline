@@ -92,7 +92,8 @@ def main() -> int:
                 "From the project diary:\n\n" + body,
                 image_path=image,
             )
-            print(f"  devlog posted: {post['title']!r} image={image is not None}")
+            verb = "skipped (already posted)" if post.get("skipped") else "posted"
+            print(f"  devlog {verb}: {post['title']!r} image={image is not None}")
             check = web.check_page(slug)
             print(f"  page check: HTTP {check['status']} -> {check['landed']} ({check['title']!r})")
             results.append({"title": title, "slug": slug, "id": game_id, "check": check})
