@@ -72,6 +72,38 @@ def scrape(game):
         return []
 
 
+
+
+def reply(game, author, text):
+    """Post a devlog comment reply on the game's page announcing the fix."""
+    url = f"https://slothitude.itch.io/{game}"
+    safe = text.replace("\\", "").replace('"', "'")[:300]
+    script = f"""
+(async () => {{
+    const {{ chromium }} = require('playwright');
+    const browser = await chromium.launchPersistentContext(
+        (process.env.ITCH_PROFILE || "{os.path.join(GMP, 'itch_web', 'session', 'chrome_profile')}"),
+        {{ headless: false, channel: 'chrome' }});
+    const page = browser.pages()[0] || await browser.newPage();
+    await page.goto("{url}", {{ waitUntil: 'domcontentloaded', timeout: 60000 }});
+    await page.waitForTimeout(4000);
+    const box = page.locator('textarea[name="post[body]"], .community_post textarea, textarea').first();
+    if (!box) {{ await browser.close(); return 'NO_BOX'; }}
+    await box.fill("@" + {json.dumps(author)} + " Fixed and shipped! " + {json.dumps(safe)} + " — the Game Making Pipeline 🤖");
+    const btn = page.locator('button[type="submit"], .button.submit').first();
+    await btn.click().catch(() => {{}});
+    await page.waitForTimeout(3000);
+    await browser.close();
+    return 'REPLIED';
+}})()
+"""
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                       timeout=180, cwd=os.path.join(GMP, "itch_web"))
+    ok = "REPLIED" in r.stdout
+    print(f"reply {game}: {'sent' if ok else 'failed'}", flush=True)
+    return ok
+
+
 def tg(text):
     token = os.environ.get("TG_TOKEN", "")
     chat = os.environ.get("CHAT_ID", "")
@@ -103,7 +135,7 @@ def main():
                 "source": "itch",
                 "game": game,
                 "text": f"[itch comment on {game} by {c['author']}] {c['text']}",
-                "meta": {"from": {"id": "itch", "name": c["author"]}, "game": game},
+                "meta": {"from": {"id": "itch", "name": c["author"]}, "game": game, "author": c["author"], "pending_reply": True},
             }
             os.makedirs(RUNTIME_FB, exist_ok=True)
             open(os.path.join(RUNTIME_FB, f"itch-{stamp}.json"), "w", encoding="utf-8").write(
@@ -117,6 +149,29 @@ def main():
     print(f"itch feedback: {new_count} new work-orders" if new_count else "itch feedback: none new")
     return 0
 
+
+def close_the_loop():
+    """After the crew deploys: find [itch] feedback entries with pending_reply
+    whose work is done (no matching unresolved order in runtime/feedback + the
+    game repo's latest commit mentions a fix), and reply on the game page."""
+    import glob
+    for f in glob.glob(os.path.join(RUNTIME_FB, "itch-*.json")):
+        entry = json.load(open(f, encoding="utf-8"))
+        meta = entry.get("meta", {})
+        if not meta.get("pending_reply"):
+            continue
+        game = meta.get("game", "")
+        author = meta.get("author", "player")
+        text = entry["text"][:200]
+        if reply(game, author, "Your feedback just shipped to the live build."):
+            entry["meta"]["pending_reply"] = False
+            json.dump(entry, open(f, "w", encoding="utf-8"), indent=1)
+            tg(f"↩️ replied on itch ({game}) to {author}")
+
+
+if "--close-loop" in sys.argv:
+    close_the_loop()
+    sys.exit(0)
 
 if __name__ == "__main__":
     sys.exit(main())
