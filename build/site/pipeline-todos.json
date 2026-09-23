@@ -1,0 +1,25 @@
+{
+  "todos": [
+    {"id": 1, "priority": 1, "task": "Replace the Cubefall placeholder art — real key art render is still 'RENDERING' on the live card", "game": "cubefall", "status": "pending"},
+    {"id": 2, "priority": 1, "task": "Gyro Squadron tilt calibration pass — steering overshoots on phone", "game": "gyro-squadron-45", "status": "in-progress"},
+    {"id": 3, "priority": 1, "task": "Green-light Star Visitor build 18 — stuck at 214/240 tests since build 17", "game": "star-visitor", "status": "pending"},
+    {"id": 4, "priority": 1, "task": "Restore the Daily Remake job — the 2026-09-22 10:23 run failed and nothing remade", "game": null, "status": "pending"},
+    {"id": 5, "priority": 2, "task": "Cubefall test coverage 96/140 → 140/140, green twice or it doesn't ship", "game": "cubefall", "status": "in-progress"},
+    {"id": 6, "priority": 2, "task": "Octogram Arcade: ship the tile-bank zoom (PlayerOne work-order #1)", "game": "octogram-arcade", "status": "pending"},
+    {"id": 7, "priority": 2, "task": "Octogram Arcade: move mute out of the pause menu — phone UX still 4/10", "game": "octogram-arcade", "status": "pending"},
+    {"id": 8, "priority": 2, "task": "Star Visitor: burrow mechanic level 3 — tunnels under the enemy field", "game": "star-visitor", "status": "pending"},
+    {"id": 9, "priority": 2, "task": "SONAR v1.2: sonar ping cooldown tuning — spam-ping beats listening", "game": "sonar", "status": "completed"},
+    {"id": 10, "priority": 2, "task": "Slime Line: letter-bug font fallback for small screens", "game": "slime-line", "status": "completed"},
+    {"id": 11, "priority": 2, "task": "Gyro Squadron: weather cheat fairness pass — crosswind lies about drift", "game": "gyro-squadron-45", "status": "pending"},
+    {"id": 12, "priority": 3, "task": "Deploy agent_loop.py with queue drain — the Action Queue becomes real", "game": null, "status": "pending"},
+    {"id": 13, "priority": 3, "task": "Wire the Telegram bot to /build and /dispatch so chat commands land in the queue", "game": null, "status": "in-progress"},
+    {"id": 14, "priority": 3, "task": "Multiplayer signal server: production startup + auto-restart", "game": null, "status": "in-progress"},
+    {"id": 15, "priority": 3, "task": "itch feedback scraper: turn reviews into critique work-orders automatically", "game": null, "status": "pending"},
+    {"id": 16, "priority": 3, "task": "Daily remake backlog: spec the next 7 (SkiFree → Rodent's Revenge)", "game": null, "status": "pending"},
+    {"id": 17, "priority": 3, "task": "PlayerOne retrain job: replay last 50 sessions, rebuild the play policy", "game": null, "status": "completed"},
+    {"id": 18, "priority": 4, "task": "Octogram combo timer grace window (+0.5s) — ADHD-friendliness 6/10", "game": "octogram-arcade", "status": "pending"},
+    {"id": 19, "priority": 4, "task": "Site: per-game critique score badges on the game cards", "game": null, "status": "completed"},
+    {"id": 20, "priority": 4, "task": "SCULMM engine: world-gen manifest schema v2 (rooms, textures, lighting)", "game": null, "status": "pending"},
+    {"id": 21, "priority": 4, "task": "Diary RSS feed for the daily remakes", "game": null, "status": "pending"}
+  ]
+}

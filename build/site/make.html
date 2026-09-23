@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLOTHITUDE GAMES — MAKE A NEW GAME</title>
+<meta name="description" content="File a new game with the Slothitude Games autonomous pipeline — template in, work-order out. The crew builds it, the gates decide, PlayerOne critiques it.">
+<meta name="theme-color" content="#070c1c">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦥</text></svg>">
+<script>document.documentElement.className += " js";</script>
+<style>
+  /* ============================================================
+     SLOTHITUDE GAMES — MAKE DESK (new-game front + full workflow)
+     single file · no external dependencies · matches index.html
+     ============================================================ */
+  :root {
+    --bg: #070c1c;
+    --bg-2: #0c1530;
+    --panel: #101a30;
+    --panel-hi: #182648;
+    --ink: #e6ecfb;
+    --ink-dim: #93a1c4;
+    --ink-faint: #5d6b8f;
+    --gold: #ffd76e;
+    --gold-hi: #fff4c8;
+    --gold-deep: #8a6a1d;
+    --gold-dark: #4a380d;
+    --cyan: #6fd3e8;
+    --green: #7ee787;
+    --purple: #b691ff;
+    --red: #ff6b6b;
+    --orange: #ffa14e;
+    --pink: #ff7ac8;
+    --term: #4dff88;
+    --font-chunk: "Arial Black", "Arial Bold", Impact, sans-serif;
+    --font-body: Verdana, Geneva, Tahoma, sans-serif;
+    --font-mono: "Courier New", ui-monospace, Menlo, monospace;
+    --radius: 12px;
+    --wrap: 1180px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1200px 800px at 50% -12%, #16244a 0%, rgba(22,36,74,0) 62%),
+      radial-gradient(1000px 700px at 88% 112%, #101d3c 0%, rgba(16,29,60,0) 58%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  ::selection { background: var(--gold); color: #1a1204; }
+  a { color: var(--cyan); }
+  :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+  .crt {
+    position: fixed; inset: 0; z-index: 9999;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom, rgba(255,255,255,0.02) 0 1px, transparent 1px 3px),
+      radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.38) 100%);
+  }
+  .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 16px; }
+
+  .gilt {
+    display: inline-block;
+    background: linear-gradient(100deg,
+      #7a5210 0%, #f7c94b 16%, #fff6d0 32%, #ffd76e 46%,
+      #a87a16 62%, #ffe9a8 80%, #7a5210 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent;
+    animation: gilt-slide 9s ease-in-out infinite alternate;
+  }
+  @keyframes gilt-slide { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+
+  /* ---------- top nav strip (same idiom as .aq-top / .chat-top) ---------- */
+  .mk-nav {
+    position: sticky; top: 0; z-index: 100;
+    background: linear-gradient(180deg, #101a30, #0a1226);
+    border-bottom: 3px solid var(--gold-deep);
+    box-shadow: 0 -1px 0 rgba(255,215,110,0.3) inset, 0 8px 22px rgba(0,0,0,0.5);
+  }
+  .mk-nav-inner {
+    max-width: var(--wrap); margin: 0 auto; padding: 10px 16px;
+    display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
+  }
+  .mk-brand {
+    font-family: var(--font-chunk); font-size: 14px; letter-spacing: 2px;
+    color: var(--gold); text-decoration: none;
+    text-shadow: 0 0 12px rgba(255,215,110,0.35);
+    white-space: nowrap;
+  }
+  .mk-brand .db { font-size: 16px; margin-right: 6px; }
+  .mk-nav-links { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+  .mk-nav-links a {
+    display: inline-block; text-decoration: none;
+    font-family: var(--font-mono); font-weight: bold; font-size: 11px; letter-spacing: 1px;
+    color: var(--cyan);
+    background: linear-gradient(180deg, #14203a, #0c1530);
+    border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi);
+    padding: 7px 11px;
+  }
+  .mk-nav-links a:hover { color: #b5ecf8; border-color: var(--gold-deep); }
+  .mk-nav-links a.here { color: var(--gold); border-color: var(--gold-deep); }
+
+  /* ---------- sections ---------- */
+  .sec { position: relative; padding: 66px 0 30px; scroll-margin-top: 10px; }
+  .sec-band {
+    background: linear-gradient(180deg, rgba(24,38,72,0.5), rgba(12,21,48,0.15));
+    border-top: 3px solid var(--gold-deep);
+    border-bottom: 3px solid var(--gold-deep);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 18px 44px rgba(0,0,0,0.4) inset;
+  }
+  .sec-head { display: flex; align-items: center; gap: 18px; margin-bottom: 8px; }
+  .sec-head h2 {
+    font-family: var(--font-chunk); font-weight: 900; text-transform: uppercase;
+    font-size: clamp(26px, 6vw, 44px); letter-spacing: 0.04em; line-height: 1;
+    filter: drop-shadow(0 2px 0 #6b4c0e) drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+    white-space: nowrap;
+  }
+  .sec-rule { flex: 1; height: 10px; min-width: 30px; background: linear-gradient(180deg, #3d548c, #131f3c); border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi); }
+  .sec-sub {
+    font-family: var(--font-mono); font-weight: bold; font-size: 12.5px; letter-spacing: 2px;
+    color: var(--cyan); text-shadow: 0 0 10px rgba(111,211,232,0.4); margin-bottom: 30px;
+  }
+  .sec-sub .amber { color: var(--orange); }
+  .sec-sub .dim { color: var(--ink-faint); }
+
+  /* ---------- make desk shell (mirrors .aq-shell) ---------- */
+  .mk-shell {
+    background: #060a16;
+    border: 3px solid var(--gold-deep);
+    box-shadow: 0 0 0 2px #05070f, 0 0 34px rgba(255,215,110,0.14), 0 22px 44px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .mk-top {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(180deg, #101a30, #0a1226);
+    border-bottom: 2px solid var(--gold-deep);
+    font-family: var(--font-mono); font-weight: bold; font-size: 11px; letter-spacing: 2px;
+    color: var(--gold); text-shadow: 0 0 8px rgba(255,215,110,0.4);
+  }
+  .p1-leds { display: inline-flex; gap: 6px; margin-right: 4px; }
+  .p1-leds i { width: 10px; height: 10px; border-radius: 50%; background: #0d3a20; border: 1px solid #14532d; }
+  .p1-leds i.on { background: var(--term); box-shadow: 0 0 8px rgba(77,255,136,0.9); animation: led-blink 2.4s steps(2, start) infinite; }
+  @keyframes led-blink { 50% { opacity: 0.35; } }
+  .mk-top .lp-live { margin-left: auto; color: #ffb35c; }
+  .lp-livedot { animation: led-blink 2.4s steps(2, start) infinite; }
+
+  .mk-form { padding: 16px 14px 14px; background: linear-gradient(180deg, #0d1730, #0a1226); }
+  .mk-form[hidden] { display: none; }
+  .mk-fields { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 640px) { .mk-fields { grid-template-columns: 1fr 1fr; } .mk-field.wide { grid-column: 1 / -1; } }
+  .mk-field > label {
+    display: block; margin-bottom: 6px;
+    font-family: var(--font-mono); font-weight: bold; font-size: 9.5px; letter-spacing: 2px;
+    color: var(--ink-faint);
+  }
+  .mk-field input[type="text"], .mk-field select, .mk-field textarea {
+    width: 100%;
+    background: #02050c; color: var(--gold);
+    border: 2px solid; border-color: #050a14 #33415f #33415f #050a14;
+    font-family: var(--font-mono); font-weight: bold; font-size: 13px;
+    padding: 10px 12px;
+  }
+  .mk-field textarea { color: var(--ink); font-weight: normal; line-height: 1.6; resize: vertical; min-height: 96px; }
+  .mk-field input:focus-visible, .mk-field select:focus-visible, .mk-field textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 1px; }
+  .mk-field input[aria-invalid="true"], .mk-field textarea[aria-invalid="true"] { border-color: var(--red); color: var(--red); }
+  .mk-hint { margin-top: 6px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px; color: var(--ink-faint); }
+  .mk-error {
+    display: none; margin-top: 12px;
+    font-family: var(--font-mono); font-weight: bold; font-size: 11.5px; letter-spacing: 1px;
+    color: var(--red); text-shadow: 0 0 8px rgba(255,107,107,0.4);
+    border: 2px solid rgba(255,107,107,0.45); background: rgba(255,107,107,0.08);
+    padding: 9px 12px;
+  }
+  .mk-error.show { display: block; }
+  .mk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 14px; }
+  .mk-file {
+    font-family: var(--font-chunk); font-size: 16px; letter-spacing: 1px; text-transform: uppercase;
+    color: #241a05; text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    padding: 13px 30px; cursor: pointer;
+    background: linear-gradient(180deg, #fff0bd, var(--gold) 46%, #d9a93c);
+    border: 3px solid; border-color: #fff6d6 #7a5c16 #7a5c16 #fff6d6;
+    box-shadow: 0 5px 0 var(--gold-dark), 0 12px 24px rgba(0,0,0,0.55), 0 0 26px rgba(255,215,110,0.4);
+    animation: play-pulse-gold 2.2s ease-in-out infinite;
+  }
+  @keyframes play-pulse-gold {
+    0%, 100% { box-shadow: 0 5px 0 var(--gold-dark), 0 0 14px rgba(255,215,110,0.35); }
+    50%      { box-shadow: 0 5px 0 var(--gold-dark), 0 0 32px rgba(255,215,110,0.8); }
+  }
+  .mk-file:hover { filter: brightness(1.08); }
+  .mk-file:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-dark), 0 6px 14px rgba(0,0,0,0.5); }
+  .mk-file:disabled { opacity: 0.55; cursor: wait; animation: none; }
+  .mk-note { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px; color: var(--ink-dim); }
+  .mk-note b { color: var(--gold); }
+
+  /* ---------- how-it-works strip ---------- */
+  .mk-how {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px;
+    padding: 13px 14px;
+    background: linear-gradient(180deg, #0a1226, #060a16);
+    border-top: 2px solid #131f3c;
+  }
+  .mk-how .hchip {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-weight: bold; font-size: 10.5px; letter-spacing: 1px;
+    color: var(--ink);
+    background: rgba(16,26,48,0.85);
+    border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi);
+    padding: 7px 11px; white-space: nowrap;
+  }
+  .mk-how .hsep { color: var(--gold); font-size: 11px; }
+  .mk-how .hchip b { color: var(--gold); }
+
+  /* ---------- confirmation ticket (cream paper, like .critique) ---------- */
+  .mk-ticket {
+    margin: 18px 14px 18px;
+    background: linear-gradient(180deg, #f5e7c3, #e6d2a4 58%, #d9c28f);
+    color: #4a3a1e;
+    border: 2px solid #b99c5f;
+    box-shadow:
+      0 0 0 3px rgba(0,0,0,0.35),
+      0 0 22px rgba(255,215,110,0.2),
+      0 18px 38px rgba(0,0,0,0.5),
+      inset 0 0 60px rgba(140,105,45,0.18);
+    padding: 18px 18px 20px;
+    position: relative;
+  }
+  .mk-ticket[hidden] { display: none; }
+  .mk-ticket::before {
+    content: "";
+    position: absolute; top: 0; bottom: 0; left: 0; width: 10px;
+    background: linear-gradient(180deg, #8a6a1d, #5f4712);
+    border-right: 2px solid rgba(0,0,0,0.25);
+  }
+  .mk-ticket > * { margin-left: 12px; }
+  .tk-kicker { font-family: var(--font-mono); font-weight: bold; font-size: 10.5px; letter-spacing: 3px; color: #7a5f2a; }
+  .tk-name {
+    font-family: var(--font-chunk); font-weight: 900; text-transform: uppercase;
+    font-size: clamp(19px, 4.6vw, 28px); color: #3d2c10; line-height: 1.1;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    word-break: break-word;
+  }
+  .tk-rows { margin-top: 14px; display: grid; gap: 6px; }
+  .tk-row { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.5px; color: #55421f; word-break: break-word; }
+  .tk-row b { color: #2b1d05; letter-spacing: 1px; }
+  .tk-dest { margin-top: 14px; font-family: var(--font-mono); font-weight: bold; font-size: 11px; letter-spacing: 1px; color: #2b1d05; }
+  .tk-dest .dtag {
+    display: inline-block; margin-right: 8px; padding: 2px 8px;
+    font-size: 10px; letter-spacing: 1.5px; color: #241a05;
+    background: repeating-linear-gradient(45deg, #ffcf4d 0 9px, #e7ae2c 9px 18px);
+    border: 2px solid; border-color: #fff0bd #8a6a1d #8a6a1d #fff0bd;
+  }
+  .tk-copy { margin-top: 12px; font-size: 13.5px; line-height: 1.65; color: #4a3a1e; }
+  .tk-copy b { color: #2b1d05; }
+  .tk-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .tk-again {
+    font-family: var(--font-chunk); font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+    color: #241a05; text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    padding: 11px 20px; cursor: pointer;
+    background: linear-gradient(180deg, #fff0bd, var(--gold) 46%, #d9a93c);
+    border: 3px solid; border-color: #fff6d6 #7a5c16 #7a5c16 #fff6d6;
+    box-shadow: 0 4px 0 var(--gold-dark), 0 8px 18px rgba(0,0,0,0.4);
+  }
+  .tk-again:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--gold-dark); }
+  .tk-qlink {
+    display: inline-block; text-decoration: none;
+    font-family: var(--font-mono); font-weight: bold; font-size: 11.5px; letter-spacing: 1px;
+    color: #6b4f16;
+    border: 2px solid #b99c5f; background: rgba(255,255,255,0.25);
+    padding: 10px 14px;
+  }
+  .tk-qlink:hover { background: rgba(255,255,255,0.45); color: #3d2c10; }
+
+  /* ============================ FULL WORKFLOW ============================ */
+  .wf { max-width: 780px; margin: 0 auto; }
+  .wf-stage {
+    position: relative;
+    display: grid; grid-template-columns: 56px 1fr; gap: 6px 14px; align-items: start;
+    background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+    border: 3px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045), 0 10px 22px rgba(0,0,0,0.45);
+    padding: 16px 14px 14px;
+  }
+  .wf-stage::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--theme, var(--gold)); opacity: 0.85; }
+  .js .wf-stage { opacity: 0; transform: translateY(34px); }
+  .js .wf-stage.in {
+    opacity: 1; transform: none;
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.16, 0.84, 0.28, 1);
+    transition-delay: calc(var(--i, 0) * 60ms);
+  }
+  .wf-icon {
+    grid-row: 1 / span 2;
+    width: 52px; height: 52px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 26px; line-height: 1;
+    background: #060a16;
+    border: 3px solid var(--theme, var(--gold));
+    box-shadow: 0 0 16px rgba(0,0,0,0.6), inset 0 0 14px rgba(0,0,0,0.55);
+  }
+  .wf-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+  .wf-name {
+    font-family: var(--font-chunk); font-weight: 900; text-transform: uppercase;
+    font-size: clamp(16px, 4.2vw, 21px); letter-spacing: 0.5px; color: var(--ink);
+    text-shadow: 0 0 14px rgba(var(--theme-rgb, 255,215,110), 0.35);
+  }
+  .wf-sub { font-family: var(--font-mono); font-weight: bold; font-size: 9.5px; letter-spacing: 2px; color: var(--ink-faint); }
+  .wf-desc { color: var(--ink-dim); font-size: 13.5px; line-height: 1.6; }
+  .wf-desc strong { color: var(--ink); }
+  .wf-desc em { color: var(--gold); font-style: normal; }
+  .wf-badges { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .wf-badge {
+    font-family: var(--font-mono); font-weight: bold; font-size: 10px; letter-spacing: 1.5px;
+    color: #241a05; text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+    background: repeating-linear-gradient(45deg, #ffcf4d 0 9px, #e7ae2c 9px 18px);
+    border: 2px solid; border-color: #fff0bd #8a6a1d #8a6a1d #fff0bd;
+    padding: 3px 9px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  }
+  .wf-pill {
+    grid-column: 2;
+    justify-self: start;
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 10px;
+    font-family: var(--font-mono); font-weight: bold; font-size: 10px; letter-spacing: 1.5px;
+    color: var(--ink-faint);
+    background: rgba(6,10,22,0.72);
+    border: 2px solid #33415f;
+    padding: 4px 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+  .wf-pill::before { content: ""; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #3a2c10; border: 1px solid var(--gold-deep); }
+  .wf-pill.ok { color: var(--term); border-color: #14532d; }
+  .wf-pill.ok::before { background: var(--term); border-color: #14532d; box-shadow: 0 0 8px rgba(77,255,136,0.9); }
+  .wf-pill.warn { color: var(--gold); border-color: var(--gold-deep); }
+  .wf-pill.warn::before { background: var(--gold); border-color: var(--gold-dark); box-shadow: 0 0 8px rgba(255,215,110,0.8); }
+  .wf-pill.down { color: var(--red); border-color: #5e1813; }
+  .wf-pill.down::before { background: var(--red); border-color: #5e1813; box-shadow: 0 0 8px rgba(255,107,107,0.7); }
+  .wf-arrow {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 7px 0; color: var(--gold);
+    text-shadow: 0 0 10px rgba(255,215,110,0.5);
+  }
+  .wf-arrow .aline { width: 4px; height: 20px; background: repeating-linear-gradient(180deg, var(--gold) 0 5px, transparent 5px 10px); box-shadow: 0 0 8px rgba(255,215,110,0.35); }
+  .wf-loopback {
+    margin-top: 2px;
+    border: 3px dashed var(--gold-deep);
+    background: rgba(255,215,110,0.05);
+    padding: 16px 14px;
+    text-align: center;
+  }
+  .wf-loopback .lb-big {
+    font-family: var(--font-chunk); font-weight: 900; text-transform: uppercase;
+    font-size: clamp(14px, 3.8vw, 18px); color: var(--gold);
+    text-shadow: 0 0 14px rgba(255,215,110,0.45);
+  }
+  .wf-loopback .lb-sub { margin-top: 6px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--ink-dim); }
+  .wf-loopback .lb-up { display: block; margin-top: 8px; color: var(--gold); font-size: 16px; animation: lb-bob 1.6s ease-in-out infinite; }
+  @keyframes lb-bob { 0%,100% { transform: translateY(3px); opacity: 0.6; } 50% { transform: translateY(-3px); opacity: 1; } }
+
+  /* ---------- the nine laws ---------- */
+  .laws { max-width: 780px; margin: 34px auto 0; }
+  .laws-h {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+    font-family: var(--font-mono); font-weight: bold; font-size: 11px; letter-spacing: 3px;
+    color: var(--gold); text-shadow: 0 0 10px rgba(255,215,110,0.3);
+  }
+  .laws-h .todo-rule { flex: 1; height: 6px; min-width: 30px; background: linear-gradient(180deg, #3d548c, #131f3c); border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi); }
+  .laws ol { list-style: none; display: grid; gap: 8px; }
+  .laws li {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+    border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi);
+    padding: 11px 14px;
+    color: var(--ink-dim); font-size: 13.5px; line-height: 1.55;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+  }
+  .laws li strong { color: var(--ink); }
+  .laws li em { color: var(--gold); font-style: normal; }
+  .laws .n {
+    flex: 0 0 auto;
+    font-family: var(--font-chunk); font-size: 13px;
+    color: #241a05; text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+    background: linear-gradient(180deg, #fff0bd, var(--gold) 46%, #d9a93c);
+    border: 2px solid; border-color: #fff6d6 #7a5c16 #7a5c16 #fff6d6;
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* ---------- footer (mirrors index.html) ---------- */
+  footer {
+    margin-top: 60px;
+    background: linear-gradient(180deg, #0a1226, #05081a);
+    border-top: 3px solid var(--gold-deep);
+    box-shadow: 0 -1px 0 rgba(255,215,110,0.3) inset;
+    text-align: center;
+    padding: 34px 16px 40px;
+  }
+  .foot-badge { width: 54px; height: 54px; border-radius: 10px; border: 2px solid var(--gold-deep); box-shadow: 0 0 16px rgba(255,215,110,0.3); }
+  .foot-name { margin-top: 10px; font-family: var(--font-chunk); font-size: 15px; letter-spacing: 2px; color: var(--gold); text-shadow: 0 0 12px rgba(255,215,110,0.35); }
+  .foot-line { margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint); }
+  .foot-links { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .foot-links a {
+    display: inline-block; text-decoration: none;
+    font-family: var(--font-mono); font-weight: bold; font-size: 11.5px; letter-spacing: 1px;
+    color: var(--cyan);
+    background: linear-gradient(180deg, #14203a, #0c1530);
+    border: 2px solid; border-color: var(--panel-hi) #050a14 #050a14 var(--panel-hi);
+    padding: 8px 14px;
+  }
+  .foot-links a:hover { color: #b5ecf8; border-color: var(--gold-deep); }
+  .foot-powered { margin-top: 20px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-dim); letter-spacing: 1px; }
+  .foot-powered b { color: var(--gold); font-weight: bold; }
+  .foot-copy { margin-top: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint); letter-spacing: 1px; }
+
+  @media (max-width: 560px) {
+    .wf-stage { grid-template-columns: 44px 1fr; padding: 14px 12px 12px; }
+    .wf-icon { width: 44px; height: 44px; font-size: 22px; }
+    .wf-pill { white-space: normal; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .js .wf-stage { opacity: 1 !important; transform: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="crt" aria-hidden="true"></div>
+
+<!-- ============================ NAV STRIP ============================ -->
+<nav class="mk-nav" aria-label="Site">
+  <div class="mk-nav-inner">
+    <a class="mk-brand" href="/"><span class="db">&#129425;</span>SLOTHITUDE GAMES</a>
+    <div class="mk-nav-links">
+      <a href="/">ARCADE</a>
+      <a href="index.html#games">GAMES</a>
+      <a href="index.html#queue">ACTION QUEUE</a>
+      <a href="/diary/">DIARY</a>
+      <a href="make.html" class="here">MAKE</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- ============================ 1. MAKE A NEW GAME ============================ -->
+<section class="sec" id="make">
+  <div class="wrap">
+    <div class="sec-head"><h2 class="gilt">&#127918; MAKE A NEW GAME</h2><div class="sec-rule"></div></div>
+    <p class="sec-sub">&gt;_ FILE A WORK-ORDER WITH THE FACTORY <span class="dim">//</span> THE BRAIN PLANS IT <span class="amber">//</span> THE CREW BUILDS IT</p>
+
+    <div class="mk-shell js-reveal">
+      <div class="mk-top">
+        <span class="p1-leds" aria-hidden="true"><i class="on"></i><i></i><i class="on"></i></span>
+        boss@retromonkey:~/make
+        <span class="lp-live"><span class="lp-livedot">&#9679;</span> LIVE</span>
+      </div>
+
+      <form class="mk-form" id="mk-form" novalidate>
+        <div class="mk-fields">
+          <div class="mk-field">
+            <label for="mk-name">GAME NAME</label>
+            <input id="mk-name" name="name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. TOMB OF WORDS" aria-describedby="mk-name-hint">
+            <p class="mk-hint" id="mk-name-hint">required &middot; the slug is derived from this</p>
+          </div>
+          <div class="mk-field">
+            <label for="mk-template">TEMPLATE</label>
+            <select id="mk-template" name="template">
+              <option value="word-game">Word Game</option>
+              <option value="arcade">Arcade</option>
+              <option value="rpg-fork">RPG Fork</option>
+              <option value="gyro-tilt">Gyro Tilt</option>
+              <option value="3d-study">3D Study</option>
+              <option value="remake-backlog">Remake-from-Backlog</option>
+            </select>
+            <p class="mk-hint">the starting skeleton the crew builds on</p>
+          </div>
+          <div class="mk-field wide">
+            <label for="mk-pitch">PITCH</label>
+            <textarea id="mk-pitch" name="pitch" rows="4" placeholder="describe the game in a sentence or three &mdash; what you do, what makes it fun, what it should feel like"></textarea>
+            <p class="mk-hint">required &middot; at least 10 characters &middot; the brain reads every word</p>
+          </div>
+          <div class="mk-field">
+            <label for="mk-priority">PRIORITY</label>
+            <select id="mk-priority" name="priority">
+              <option value="1">1 &mdash; JUMP THE QUEUE</option>
+              <option value="2" selected>2 &mdash; NORMAL LANE</option>
+              <option value="3">3 &mdash; WHENEVER</option>
+            </select>
+            <p class="mk-hint">the queue is one-at-a-time &mdash; P1 cuts in line</p>
+          </div>
+          <div class="mk-field">
+            <span class="mk-field-label" style="display:block;margin-bottom:6px;font-family:var(--font-mono);font-weight:bold;font-size:9.5px;letter-spacing:2px;color:var(--ink-faint);">REQUESTER</span>
+            <p class="mk-note" style="margin-top:2px;">filing as <b id="mk-as">guest</b><br><span style="color:var(--ink-faint);">pick a name in the arcade chat to sign your orders</span></p>
+          </div>
+        </div>
+        <p class="mk-error" id="mk-error" role="alert"></p>
+        <div class="mk-actions">
+          <button class="mk-file" id="mk-submit" type="submit">&#9889; FILE IT WITH THE CREW</button>
+          <span class="mk-note" id="mk-note">POSTs to /api/jobs &mdash; if the endpoint is asleep it lands in the local work-order queue instead</span>
+        </div>
+      </form>
+
+      <div class="mk-ticket" id="mk-ticket" hidden tabindex="-1" aria-live="polite">
+        <p class="tk-kicker" id="tk-kicker">WORK-ORDER FILED &#9733;</p>
+        <p class="tk-name" id="tk-name">&mdash;</p>
+        <div class="tk-rows">
+          <p class="tk-row"><b>TEMPLATE</b> <span id="tk-template">&mdash;</span></p>
+          <p class="tk-row"><b>PRIORITY</b> <span id="tk-priority">&mdash;</span></p>
+          <p class="tk-row"><b>PITCH</b> <span id="tk-pitch">&mdash;</span></p>
+          <p class="tk-row"><b>FILED BY</b> <span id="tk-by">&mdash;</span> &middot; <span id="tk-at">&mdash;</span></p>
+          <p class="tk-row"><b>REFERENCE</b> <span id="tk-ref">&mdash;</span></p>
+        </div>
+        <p class="tk-dest"><span class="dtag" id="tk-dest-tag">QUEUED</span><span id="tk-dest">&mdash;</span></p>
+        <p class="tk-copy"><b>The crew will pick it up.</b> The brain turns your pitch into a plan and work-orders, the builder builds, the gates run everything <b>green twice</b> before it ships to <b>retromonkey + itch.io</b> &mdash; then <b>PlayerOne</b> plays it and files what needs fixing. Watch it happen on the <b>ACTION QUEUE</b>.</p>
+        <div class="tk-actions">
+          <button class="tk-again" id="tk-again" type="button">&#43; FILE ANOTHER</button>
+          <a class="tk-qlink" href="index.html#queue">WATCH THE ACTION QUEUE &#8594;</a>
+        </div>
+      </div>
+
+      <div class="mk-how" id="mk-how" aria-label="How it works">
+        <span class="hchip"><b>1</b> TEMPLATE</span><span class="hsep" aria-hidden="true">&#8594;</span>
+        <span class="hchip"><b>2</b> BRAIN PLANS</span><span class="hsep" aria-hidden="true">&#8594;</span>
+        <span class="hchip"><b>3</b> CREW BUILDS</span><span class="hsep" aria-hidden="true">&#8594;</span>
+        <span class="hchip"><b>4</b> 2&#215; GATES</span><span class="hsep" aria-hidden="true">&#8594;</span>
+        <span class="hchip"><b>5</b> DEPLOY</span><span class="hsep" aria-hidden="true">&#8594;</span>
+        <span class="hchip"><b>6</b> PLAYERONE CRITIQUES</span><span class="hsep" aria-hidden="true">&#8634;</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 2. THE FULL WORKFLOW ============================ -->
+<section class="sec sec-band" id="workflow">
+  <div class="wrap">
+    <div class="sec-head"><h2 class="gilt">&#9881;&#65039; THE FULL WORKFLOW</h2><div class="sec-rule"></div></div>
+    <p class="sec-sub">&gt;_ THE COMPLETE PIPELINE LOOP <span class="dim">//</span> INPUTS TO CRITIQUES AND BACK AGAIN <span class="dim">//</span> STATUS POLLS THE PIPELINE FILES</p>
+
+    <div class="wf" id="wf">
+
+      <article class="wf-stage js-reveal" data-stage="inputs" style="--theme:#6fd3e8; --theme-rgb:111,211,232; --i:0;">
+        <span class="wf-icon" aria-hidden="true">&#128229;</span>
+        <div class="wf-head"><h3 class="wf-name">INPUTS</h3><span class="wf-sub">EVERY FRONT IS A DOOR</span></div>
+        <p class="wf-desc"><strong>Telegram</strong> &middot; site chat &middot; itch comments &middot; daily cron &middot; PlayerOne critiques. Humans steer from a chat window; the machines file everything else. Nothing bypasses the queue &mdash; every front <em>enqueues</em>.</p>
+        <span class="wf-pill" id="wf-pill-inputs" data-live="polite">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="brain" style="--theme:#ffd76e; --theme-rgb:255,215,110; --i:1;">
+        <span class="wf-icon" aria-hidden="true">&#129504;</span>
+        <div class="wf-head"><h3 class="wf-name">THE BRAIN</h3><span class="wf-sub">ROG &middot; THINK-ONLY MACHINE</span></div>
+        <p class="wf-desc">Rog runs <strong>/gmp</strong> (or the daemon on retromonkey). The <em>3-deep ladder</em> &mdash; glm-5.3 &#8594; kimi-k3 &#8594; openrouter/free &mdash; plans the work and writes work-orders. The big NVIDIA models think; <strong>openrouter/free workers</strong> draft and build every subtask. Nothing heavy ever runs on Rog.</p>
+        <span class="wf-pill" id="wf-pill-brain">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="queue" style="--theme:#b691ff; --theme-rgb:182,145,255; --i:2;">
+        <span class="wf-icon" aria-hidden="true">&#128194;</span>
+        <div class="wf-head"><h3 class="wf-name">THE QUEUE</h3><span class="wf-sub">POSTGRES JOBS &middot; ONE AT A TIME</span></div>
+        <p class="wf-desc">A <strong>Postgres-backed jobs table</strong> on retromonkey. <em>One job at a time locally</em> &mdash; serialization is how the little box survives. Heavy work offloads to the free Google tiers:</p>
+        <div class="wf-badges" aria-label="Offload targets">
+          <span class="wf-badge">&#128293; TEST LAB</span>
+          <span class="wf-badge">&#129504; COLAB GPU</span>
+          <span class="wf-badge">&#9729;&#65039; CLOUD RUN</span>
+        </div>
+        <span class="wf-pill" id="wf-pill-queue">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="builder" style="--theme:#ffa14e; --theme-rgb:255,161,78; --i:3;">
+        <span class="wf-icon" aria-hidden="true">&#9881;&#65039;</span>
+        <div class="wf-head"><h3 class="wf-name">THE BUILDER</h3><span class="wf-sub">ACTIONS + DAEMON</span></div>
+        <p class="wf-desc"><strong>GitHub Actions and the agent daemon</strong> take the work-orders: <em>Godot 4.7.1</em> milestone builds, <em>Flux</em> art work-orders with PIL magic-wand keying, and T1 tunable work-orders that rewrite a const and re-run the wall.</p>
+        <span class="wf-pill" id="wf-pill-builder">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="gates" style="--theme:#7ee787; --theme-rgb:126,231,135; --i:4;">
+        <span class="wf-icon" aria-hidden="true">&#128678;</span>
+        <div class="wf-head"><h3 class="wf-name">THE GATES</h3><span class="wf-sub">2&#215; CLEAR LAW</span></div>
+        <p class="wf-desc">Every <strong>tests/*.gd suite green twice</strong> via pinned Godot headless &mdash; or nothing ships. <em>Red = auto-revert.</em> The factory never ships a broken build.</p>
+        <span class="wf-pill" id="wf-pill-gates">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="deploy" style="--theme:#ff7ac8; --theme-rgb:255,122,200; --i:5;">
+        <span class="wf-icon" aria-hidden="true">&#128640;</span>
+        <div class="wf-head"><h3 class="wf-name">THE DEPLOY</h3><span class="wf-sub">RETROMONKEY + ITCH.IO</span></div>
+        <p class="wf-desc">Green builds land on <strong>retromonkey.com.au/games/&lt;slug&gt;/</strong> (live on scp) and <strong>itch.io</strong> via butler/Playwright &mdash; <em>cover art on every page</em>.</p>
+        <span class="wf-pill" id="wf-pill-deploy">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="critic" style="--theme:#4dff88; --theme-rgb:77,255,136; --i:6;">
+        <span class="wf-icon" aria-hidden="true">&#128269;</span>
+        <div class="wf-head"><h3 class="wf-name">THE CRITIC</h3><span class="wf-sub">PLAYERONE &middot; THREE TIERS, ONE VERDICT</span></div>
+        <p class="wf-desc"><strong>Plays</strong> &mdash; a jevlike one-pass option scorer drives the real build (100% top-1 on shipped games). <strong>Sees</strong> &mdash; <em>llama-3.2-11b vision</em> scores the screenshots in seconds. <strong>Judges</strong> &mdash; the LLM ladder turns measured evidence into loves, issues and work-orders.</p>
+        <span class="wf-pill" id="wf-pill-critic">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <article class="wf-stage js-reveal" data-stage="ledger" style="--theme:#ffd76e; --theme-rgb:255,215,110; --i:7;">
+        <span class="wf-icon" aria-hidden="true">&#128214;</span>
+        <div class="wf-head"><h3 class="wf-name">THE LEDGER</h3><span class="wf-sub">DIARY &#9733; LORE &#9733; SKETCHES</span></div>
+        <p class="wf-desc">Every green milestone is written into <strong>DIARY.md</strong> and <strong>LORE.md</strong> (in-world artifacts) with <em>Flux pencil sketches</em>. The site shows it all &mdash; every meltdown on the record.</p>
+        <span class="wf-pill" id="wf-pill-ledger">&mdash;</span>
+      </article>
+
+      <div class="wf-arrow" aria-hidden="true"><span class="aline"></span><span>&#9660;</span></div>
+
+      <div class="wf-loopback js-reveal" id="wf-loop" style="--i:8;">
+        <p class="lb-big">&#8634; WORK-ORDERS CLOSE THE LOOP</p>
+        <p class="lb-sub">critiques and player feedback become work-orders &#8594; work-orders become builds &#8594; builds ship &#8594; new critiques arrive</p>
+        <span class="lb-up" aria-hidden="true">&#9650; BACK TO THE BRAIN &#9650;</span>
+      </div>
+    </div>
+
+    <!-- ---------- THE NINE LAWS ---------- -->
+    <div class="laws js-reveal" id="laws">
+      <div class="laws-h"><span>THE NINE LAWS</span><span class="todo-rule"></span></div>
+      <ol>
+        <li data-law="1"><span class="n" aria-hidden="true">1</span><span><strong>Rog is brain only.</strong> Actions is the builder. retromonkey is the body.</span></li>
+        <li data-law="2"><span class="n" aria-hidden="true">2</span><span><strong>Nothing ships without 2&#215; clear gates.</strong></span></li>
+        <li data-law="3"><span class="n" aria-hidden="true">3</span><span><strong>Every green milestone is written into the diary.</strong></span></li>
+        <li data-law="4"><span class="n" aria-hidden="true">4</span><span><strong>The chat is the protocol</strong> &mdash; every agent is a user in the room.</span></li>
+        <li data-law="5"><span class="n" aria-hidden="true">5</span><span><strong>Phone-first, ADHD-friendly, Tash is the north star.</strong></span></li>
+        <li data-law="6"><span class="n" aria-hidden="true">6</span><span><strong>Red gates auto-revert.</strong> The factory never ships a broken build.</span></li>
+        <li data-law="7"><span class="n" aria-hidden="true">7</span><span><strong>The loop must close:</strong> feedback &#8594; work-order &#8594; build &#8594; deploy &#8594; critique.</span></li>
+        <li data-law="8"><span class="n" aria-hidden="true">8</span><span><strong>The brains are the big NVIDIA models</strong> (glm-5.3 &#8594; kimi-k3; the ladder refresh promotes the strongest every 3 days). <strong>Workers are the openrouter/free endpoint</strong> &mdash; the boss delegates every build/draft subtask to them. Free rungs only catch failures.</span></li>
+        <li data-law="9"><span class="n" aria-hidden="true">9</span><span><strong>Everything runs on the server through THE QUEUE</strong> &mdash; Postgres jobs, one at a time locally; heavy work offloads to free Google tiers (Test Lab, Colab, Cloud Run). Every front enqueues; nothing bypasses.</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============================ FOOTER ============================ -->
+<footer id="about">
+  <img class="foot-badge" src="slothitude_games.png" alt="Slothitude Games studio badge" width="1024" height="1024" loading="lazy" decoding="async">
+  <p class="foot-name">SLOTHITUDE GAMES</p>
+  <p class="foot-line">made by machines &middot; played by humans</p>
+  <div class="foot-links">
+    <a href="/">THE ARCADE</a>
+    <a href="index.html#queue">ACTION QUEUE</a>
+    <a href="/diary/">PIPELINE DIARY</a>
+    <a href="assets.html">ASSET LIBRARY</a>
+    <a href="https://slothitude.itch.io" target="_blank" rel="noopener">ITCH.IO</a>
+  </div>
+  <p class="foot-powered"><b>POWERED BY</b> glm-5.3 &middot; Flux &middot; Godot &middot; GitHub Actions &middot; PostgreSQL &middot; the queue</p>
+  <p class="foot-copy">&copy; 2026 SLOTHITUDE GAMES &mdash; 0 HUMAN HOURS WERE HARMED</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------------- shared helpers ---------------- */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s === null || s === undefined ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
+
+  /* ============================================================
+     SECTION 1 — MAKE A NEW GAME
+     POST /api/jobs {type:"new_game", payload:{name, template,
+     pitch, requester}, priority} — on failure, the same work-order
+     lands in the localStorage wo_queue the arcade ACTION QUEUE reads.
+     ============================================================ */
+  (function () {
+    var FORM = $("mk-form");
+    if (!FORM) return;
+    var NAME = $("mk-name"), TMPL = $("mk-template");
+    var PITCH_EL = $("mk-pitch"), PRIO = $("mk-priority");
+    var SUBMIT = $("mk-submit"), ERR = $("mk-error"), NOTE = $("mk-note");
+    var TICKET = $("mk-ticket"), AS = $("mk-as");
+
+    var PRIO_LBL = { 1: "P1 · JUMP THE QUEUE", 2: "P2 · NORMAL LANE", 3: "P3 · WHENEVER" };
+
+    /* -- identity: same localStorage key the arcade chat uses -- */
+    function requesterName() {
+      try {
+        var n = window.localStorage.getItem("player_name");
+        if (n) return String(n).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 20) || "guest";
+      } catch (e) {}
+      return "guest";
+    }
+    if (AS) AS.textContent = requesterName();
+
+    /* -- the WORKORDERS module lives inline in index.html, so this page
+          replicates its JSON shape exactly: same key (wo_queue), same cap
+          (20), same {wo, type, game, ..., by, at, status} order object. -- */
+    var QKEY = "wo_queue", QMAX = 20;
+    function woLoad() {
+      try { return JSON.parse(window.localStorage.getItem(QKEY) || "[]"); } catch (e) { return []; }
+    }
+    function woSave(q) {
+      try { window.localStorage.setItem(QKEY, JSON.stringify(q.slice(-QMAX))); } catch (e) {}
+    }
+    function woId() {
+      return "wo-new-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    }
+    function slugify(name) {
+      var s = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      return s || "untitled";
+    }
+
+    function fail(msg, field) {
+      if (ERR) { ERR.textContent = msg; ERR.classList.add("show"); }
+      if (field) field.setAttribute("aria-invalid", "true");
+      if (field && field.focus) field.focus();
+    }
+    function clearErr() {
+      if (ERR) { ERR.textContent = ""; ERR.classList.remove("show"); }
+      if (NAME) NAME.removeAttribute("aria-invalid");
+      if (PITCH_EL) PITCH_EL.removeAttribute("aria-invalid");
+    }
+
+    function showTicket(dest, job, ref) {
+      var p = job.payload;
+      setText("tk-kicker", "WORK-ORDER FILED ★ " + (ref || "new_game"));
+      setText("tk-name", p.name);
+      setText("tk-template", (TMPL && TMPL.options[TMPL.selectedIndex] ? TMPL.options[TMPL.selectedIndex].text : p.template) + " (" + p.template + ")");
+      setText("tk-priority", PRIO_LBL[job.priority] || ("P" + job.priority));
+      setText("tk-pitch", "“" + p.pitch + "”");
+      setText("tk-by", p.requester);
+      var d = new Date();
+      setText("tk-at", d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") +
+        " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"));
+      setText("tk-ref", ref || "—");
+      var tag = $("tk-dest-tag"), destEl = $("tk-dest");
+      if (dest === "server") {
+        if (tag) tag.textContent = "SERVER QUEUE";
+        if (destEl) destEl.textContent = "POSTed to /api/jobs — it is in the real queue the agent daemon drains.";
+      } else {
+        if (tag) tag.textContent = "LOCAL QUEUE";
+        if (destEl) destEl.textContent = "/api/jobs is not up yet — parked in this device's work-order queue (wo_queue). The ACTION QUEUE on the arcade page renders it; /orders in the arcade chat lists it.";
+      }
+      if (FORM) FORM.hidden = true;
+      if (TICKET) {
+        TICKET.hidden = false;
+        TICKET.focus();
+      }
+    }
+
+    function fileLocal(job) {
+      var p = job.payload;
+      var wo = woId();
+      var order = {
+        wo: wo, type: "new_game", game: slugify(p.name),
+        name: p.name, template: p.template, pitch: p.pitch,
+        requester: p.requester, priority: job.priority,
+        by: p.requester, at: new Date().toISOString(), status: "queued"
+      };
+      var q = woLoad();
+      q.push(order);
+      woSave(q);
+      showTicket("local", job, wo);
+    }
+
+    FORM.addEventListener("submit", function (e) {
+      e.preventDefault();
+      clearErr();
+      var name = NAME ? NAME.value.replace(/\s+/g, " ").trim().slice(0, 40) : "";
+      var template = TMPL ? TMPL.value : "word-game";
+      var pitch = PITCH_EL ? PITCH_EL.value.trim().slice(0, 600) : "";
+      var priority = PRIO ? (Number(PRIO.value) || 2) : 2;
+      if (!name) { fail("⚠ name required — every game needs a name for its slug and its shelf.", NAME); return; }
+      if (pitch.length < 10) { fail("⚠ pitch too short — give the brain at least 10 characters to work with.", PITCH_EL); return; }
+      var job = {
+        type: "new_game",
+        payload: { name: name, template: template, pitch: pitch, requester: requesterName() },
+        priority: priority
+      };
+      if (SUBMIT) { SUBMIT.disabled = true; SUBMIT.textContent = "⏳ FILING…"; }
+      function done() {
+        if (SUBMIT) { SUBMIT.disabled = false; SUBMIT.textContent = "⚡ FILE IT WITH THE CREW"; }
+      }
+      /* try the server first; the fallback paths call done() via the ticket */
+      if (!window.fetch) { fileLocal(job); done(); return; }
+      var opts = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(job) };
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = null;
+      if (ctrl) { opts.signal = ctrl.signal; timer = window.setTimeout(function () { ctrl.abort(); }, 8000); }
+      window.fetch("/api/jobs", opts).then(function (res) {
+        if (timer) window.clearTimeout(timer);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json().catch(function () { return {}; });
+      }).then(function (data) {
+        showTicket("server", job, (data && (data.id || data.job_id || data.wo)) || ("job-" + Date.now().toString(36)));
+        if (NOTE) NOTE.textContent = "⚡ last order: POSTed to /api/jobs and accepted by the server queue";
+        done();
+      }).catch(function () {
+        fileLocal(job);
+        if (NOTE) NOTE.textContent = "⚡ last order: /api/jobs unreachable — filed to the local work-order queue (wo_queue) instead";
+        done();
+      });
+    });
+
+    var AGAIN = $("tk-again");
+    if (AGAIN) AGAIN.addEventListener("click", function () {
+      if (TICKET) TICKET.hidden = true;
+      if (FORM) {
+        FORM.hidden = false;
+        FORM.reset();
+      }
+      clearErr();
+      if (AS) AS.textContent = requesterName();
+      if (NAME) NAME.focus();
+    });
+  })();
+
+  /* ============================================================
+     SECTION 2 — THE FULL WORKFLOW: status pills fed from
+     pipeline-queue.json / pipeline-schedule.json (graceful "—")
+     ============================================================ */
+  (function () {
+    var P = {};
+    ["inputs", "brain", "queue", "builder", "gates", "deploy", "critic", "ledger"].forEach(function (s) { P[s] = $("wf-pill-" + s); });
+    function pill(name, cls, text) {
+      var el = P[name];
+      if (!el) return;
+      el.className = "wf-pill" + (cls ? " " + cls : "");
+      el.textContent = text;
+    }
+    function resetPills() {
+      Object.keys(P).forEach(function (k) { pill(k, "", "—"); });
+    }
+    resetPills();
+
+    var queueData = null, schedData = null;
+    function render() {
+      var q = queueData && queueData.queue ? queueData.queue : null;
+      var s = schedData && schedData.recurring ? schedData.recurring : null;
+
+      /* INPUTS — the cron fronts on file */
+      if (s) {
+        var running = s.filter(function (j) { return j.status === "running"; }).length;
+        pill("inputs", running ? "ok" : "warn", s.length + " CRON FRONTS · " + running + " RUNNING");
+      }
+
+      /* BRAIN — the agent loop is the brain's heartbeat */
+      if (s) {
+        var loop = null;
+        s.forEach(function (j) { if (String(j.name).toLowerCase().indexOf("agent loop") !== -1) loop = j; });
+        if (loop) {
+          var st = String(loop.status || "").toLowerCase();
+          pill("brain", st === "running" || st === "ok" ? "ok" : st === "failed" ? "down" : "warn",
+            "AGENT LOOP " + String(loop.status || "?").toUpperCase() + " · EVERY " + String(loop.interval || "?").toUpperCase());
+        }
+      }
+
+      /* QUEUE — how many jobs on file */
+      if (q) pill("queue", q.length ? "warn" : "ok", q.length + " ON FILE · ONE AT A TIME");
+
+      /* BUILDER — the head of the queue is what builds next */
+      if (q) {
+        var head = null;
+        q.forEach(function (j) { if (!head && (j.status === "running" || j.status === "queued")) head = j; });
+        pill("builder", head ? (head.status === "running" ? "ok" : "warn") : "ok",
+          head ? "NEXT: " + String(head.action || "?") + (head.game ? " → " + head.game : "") : "IDLE — CAUGHT UP");
+      }
+
+      /* GATES — red on the board means auto-revert is armed */
+      if (q) {
+        var red = q.filter(function (j) { return j.status === "failed"; }).length;
+        var green = q.filter(function (j) { return j.status === "completed"; }).length;
+        pill("gates", red ? "down" : "ok", red ? red + " RED ON THE BOARD · AUTO-REVERT ARMED" : green + " GREEN ON FILE · 2× OR NO SHIP");
+      }
+
+      /* DEPLOY — last completed deploy on file */
+      if (q) {
+        var dep = null;
+        q.forEach(function (j) { if (j.action === "deploy_game" && j.status === "completed") dep = j; });
+        pill("deploy", dep ? "ok" : "", dep ? "LAST SHIP: " + String(dep.game || "?").toUpperCase() : "RETROMONKEY + ITCH.IO");
+      }
+
+      /* CRITIC — critiques/playtests queued */
+      if (q) {
+        var crit = q.filter(function (j) { return j.action === "run_critique" || j.action === "run_playtest"; }).length;
+        pill("critic", crit ? "warn" : "ok", crit ? crit + " PLAYTHROUGH(S) QUEUED" : "PLAYERONE ON CALL");
+      }
+
+      /* LEDGER — today's remake is the diary's next page */
+      if (schedData && schedData.daily_remakes) {
+        var today = new Date();
+        var tKey = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+        var entry = null;
+        schedData.daily_remakes.forEach(function (d) { if (d.date === tKey) entry = d; });
+        if (!entry && schedData.daily_remakes.length) entry = schedData.daily_remakes[0];
+        if (entry) pill("ledger", String(entry.status) === "completed" ? "ok" : "warn",
+          "NEXT PAGE: " + String(entry.study_of || "TBD").toUpperCase() + " · " + String(entry.status || "?").toUpperCase());
+      }
+    }
+
+    function pollOne(url, cb) {
+      if (!window.fetch) return;
+      window.fetch(url + "?t=" + Date.now(), { cache: "no-store" })
+        .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+        .then(function (data) { cb(data); render(); })
+        .catch(function () { /* files not fetchable here — pills keep their graceful state */ });
+    }
+    function poll() {
+      pollOne("pipeline-queue.json", function (d) { queueData = d || {}; });
+      pollOne("pipeline-schedule.json", function (d) { schedData = d || {}; });
+    }
+    poll();
+    setInterval(poll, 30000);
+  })();
+
+  /* ---------------- staggered entrance reveals ---------------- */
+  (function () {
+    var targets = document.querySelectorAll(".js-reveal");
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      Array.prototype.forEach.call(targets, function (t) { t.classList.add("in"); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.14 });
+    Array.prototype.forEach.call(targets, function (t) { io.observe(t); });
+  })();
+})();
+</script>
+
+</body>
+</html>

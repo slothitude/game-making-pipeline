@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "updated_at": "2026-09-22T23:04:42+00:00",
+  "updated_by": "manual-curation",
+  "roles": {
+    "boss": {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "key": "nvapi"
+    },
+    "backup": {
+      "model": "deepseek-ai/deepseek-v4.1-flash",
+      "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "key": "nvapi"
+    },
+    "vision": {
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+      "key": "nvapi"
+    },
+    "worker": {
+      "model": "openrouter/free",
+      "url": "https://openrouter.ai/api/v1/chat/completions",
+      "key": "openrouter",
+      "pinned": true
+    }
+  },
+  "history": [
+    {
+      "when": "2026-09-22T23:04:42+00:00",
+      "changes": [
+        {
+          "role": "boss",
+          "from": "z-ai/glm-5.3",
+          "to": "nvidia/nemotron-3-ultra-550b-a55b",
+          "reason": "live benchmark 2026-09-23: 550B/55B-A reasoning MoE answered the critique workload in 6.5s (5/5 quality, finish=stop) while glm-5.3 returned empty content at 240.6s then 504'd four times"
+        },
+        {
+          "role": "backup",
+          "from": "moonshotai/kimi-k3",
+          "to": "deepseek-ai/deepseek-v4.1-flash",
+          "reason": "kimi-k3 timed out twice (240s) on the same workload; deepseek-v4.1-flash finished in 98.1s, 5/5 quality with 6.5k chars of reasoning; cross-vendor so it survives NVIDIA function outages"
+        },
+        {
+          "role": "vision",
+          "from": "meta/llama-3.2-11b-vision-instruct",
+          "to": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+          "reason": "image probe: omni answered in 13.7s with clean JSON vs 29.1s with markdown from the incumbent; 90b-vision timed out twice and is skipped until it serves"
+        },
+        {
+          "role": "worker",
+          "from": "openrouter/free",
+          "to": "openrouter/free",
+          "reason": "pinned by law — worker swaps are human decisions"
+        }
+      ],
+      "health": {
+        "source": "manual benchmark vs build.nvidia.com catalog + live /v1/chat/completions probes"
+      }
+    }
+  ]
+}

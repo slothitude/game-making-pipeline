@@ -1,0 +1,58 @@
+{
+  "games": [
+    {
+      "slug": "octogram-arcade",
+      "name": "Octogram Arcade",
+      "diary": "octogram/DIARY.md",
+      "live": {
+        "site": "https://retromonkey.com.au/games/octogram-arcade/",
+        "itch": "https://slothitude.itch.io/octogram-arcade",
+        "itch_embed": "https://html-classic.itch.zone/html/19348737-2003020/index.html?v=1790053000"
+      }
+    },
+    {
+      "slug": "sonar",
+      "name": "SONAR",
+      "diary": "sonar/DIARY.md",
+      "live": {
+        "site": "https://retromonkey.com.au/games/sonar/",
+        "itch": "https://slothitude.itch.io/sonar",
+        "itch_embed": "https://html-classic.itch.zone/html/19348951-2004577/index.html?v=1790089789"
+      }
+    },
+    {
+      "slug": "slime-line",
+      "name": "Slime Line",
+      "diary": "slime-line/DIARY.md",
+      "live": {
+        "site": "https://retromonkey.com.au/games/slime-line/",
+        "itch": "https://slothitude.itch.io/slime-line",
+        "itch_embed": "https://html-classic.itch.zone/html/19353113-2004441/index.html?v=1790087642"
+      }
+    },
+    {
+      "slug": "star-visitor",
+      "name": "Star Visitor",
+      "diary": "star-visitor/DIARY.md",
+      "live": {
+        "site": "https://retromonkey.com.au/games/star-visitor/",
+        "itch": "https://slothitude.itch.io/star-visitor"
+      }
+    },
+    {
+      "slug": "gyro-squadron-45",
+      "name": "Gyro Squadron '45",
+      "diary": "gyro-squadron-45/DIARY.md",
+      "live": {
+        "site": "https://retromonkey.com.au/games/gyro-squadron-45/",
+        "itch": "https://slothitude.itch.io/gyro-squadron-45"
+      }
+    },
+    {
+      "slug": "cubefall",
+      "name": "Cubefall",
+      "diary": "cubefall/DIARY.md",
+      "live": {}
+    }
+  ]
+}

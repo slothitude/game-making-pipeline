@@ -24,6 +24,7 @@ Usage (CLI):
     python itch.py login
     python itch.py create --title "SONAR" --slug sonar --tagline "..." [--desc-file d.md]
     python itch.py set-kind --id 12345          # kind -> HTML (plays in browser)
+    python itch.py upload-html5 --id 12345 --file build.zip
     python itch.py description --id 12345 --file d.md
     python itch.py publish --id 12345 / unpublish --id 12345
     python itch.py list
@@ -723,9 +724,35 @@ class ItchWeb:
         return self._publish_toggle(game_id, want=False)
 
     def _publish_toggle(self, game_id: int, want: bool) -> dict[str, Any]:
-        """The publish/unpublish control on the edit page (opens a confirm dialog)."""
+        """The publish/unpublish control on the edit page.
+
+        Current UI (itch_web/debug/publish_no_btn_5038990.html): an access-control
+        drop (#published) of radios game[published] = draft / restricted / published
+        -- select the wanted one and Save. Legacy button-based control kept as a
+        fallback for older layouts.
+        """
         page = self.page
         self._goto_edit(page, game_id)
+        val = "published" if want else "draft"
+        radio = page.locator(f"input[name='game[published]'][value='{val}']").first
+        if radio.count():
+            if not radio.is_checked():
+                lbl = page.locator(f"label:has(input[name='game[published]'][value='{val}'])").first
+                (lbl if lbl.count() else radio).click()
+                page.wait_for_timeout(400)
+                self._save_button(page, context="access").click()
+                page.wait_for_load_state("domcontentloaded")
+                page.wait_for_timeout(1200)
+            self._goto_edit(page, game_id)
+            checked = page.evaluate(
+                """() => document.querySelector("input[name='game[published]']:checked")?.value || null"""
+            )
+            if checked != val:
+                self.dump(page, f"publish_not_applied_{game_id}")
+                raise ItchError(
+                    f"game {game_id} publish state is {checked!r}, wanted {val!r} (dumped publish_not_applied_{game_id}.html)"
+                )
+            return {"id": game_id, "published": want, "via": "access_control_radios"}
         word = "publish" if want else "unpublish"
         btn = page.locator(
             f"a.publish_game_btn, .form .button:has-text('{word.capitalize()}'), "
@@ -745,6 +772,192 @@ class ItchWeb:
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(800)
         return {"id": game_id, "published": want}
+
+    def upload_html5(self, game_id: int, file_path: str) -> dict[str, Any]:
+        """Upload an HTML5 build (a ZIP with index.html at its ROOT) to a project
+        whose kind is already `html`, and make it play in the browser.
+
+        Discovered DOM (itch_web/debug/gyro_edit.html): /game/edit/<id> is ONE page;
+        the uploads editor is <section id="uploads" class="upload_editor"> whose
+        .add_file_btn_outer.upload_buttons button.button lazily creates a file input
+        (same pattern as the devlog image uploader -- no static input[type=file]).
+        itch's own law, from the section text: "Upload a ZIP file containing your
+        game. There must be an index.html file in the ZIP."
+
+        Per-row kind: each upload row (div.uploader) carries an "embed" checkbox
+        -- input[name$='[embed]'], label "This file will be played in the browser"
+        -- UNCHECKED by default. We check it, then Save.
+        """
+        page = self.page
+        self._goto_edit(page, game_id)
+        kind = page.evaluate(
+            """() => document.querySelector("select[name='game[type]']")?.value || null"""
+        )
+        if kind != "html":
+            self.dump(page, f"upload_kind_{game_id}")
+            raise ItchError(
+                f"game {game_id} kind is {kind!r}, not 'html' -- run set_kind_html first "
+                f"(dumped upload_kind_{game_id}.html)"
+            )
+        fname = Path(file_path).name
+
+        def row_state() -> dict[str, Any]:
+            """State of the row for `fname`, looked up FRESH each call (rows are
+            built client-side from the widget's embedded "uploads":[...] JSON a
+            beat after page load -- any immediate locator check races it)."""
+            res = page.evaluate(
+                """(fname) => {
+                     const all = [...document.querySelectorAll('.uploader')];
+                     const rows = all.map(r => {
+                       const nameEl = r.querySelector('.upload_display_name');
+                       const embed = r.querySelector("input[name$='[embed]']");
+                       return {
+                         name: nameEl ? nameEl.textContent : null,
+                         in_widget: !!r.closest('.game_edit_upload_list_widget'),
+                         embed_present: !!embed,
+                         embed_checked: embed ? embed.checked : null,
+                         upload_id: embed ? ((embed.name.match(/upload\\[(\\d+)\\]/) || [])[1] || null) : null,
+                       };
+                     });
+                     const mine = rows.filter(r => (r.name || '').trim() === fname);
+                     return {total: all.length, mine: mine, names: rows.map(r => r.name)};
+                   }""",
+                fname,
+            )
+            mine = res.get("mine") or []
+            if mine:
+                return dict(mine[0], present=True, total=res.get("total"))
+            return {"present": False, "total": res.get("total"), "names": res.get("names")}
+
+        def wait_widget_init(seconds: float = 15.0) -> None:
+            """Give the uploads widget time to build its rows after page load."""
+            deadline = time.time() + seconds
+            while time.time() < deadline:
+                state = row_state()
+                if state.get("present"):
+                    return
+                in_flight = page.locator(".game_edit_upload_list_widget .uploader.is_uploading").count()
+                file_list = page.locator(".game_edit_upload_list_widget .file_list").count()
+                if file_list and not in_flight and time.time() > deadline - seconds + 6:
+                    return  # widget rendered, and it has no row for us
+                time.sleep(1.0)
+
+        wait_widget_init()
+        state = row_state()
+        if state.get("present") and state.get("embed_checked"):
+            return {"id": game_id, "file": fname, "skipped": True,
+                    "already_uploaded": True, "already_playable": True}
+
+        add_btn = page.locator("section#uploads .add_file_btn_outer.upload_buttons button.button").first
+        if not add_btn.count():
+            self.dump(page, f"upload_no_btn_{game_id}")
+            raise ItchError(f"no add-file button in #uploads (dumped upload_no_btn_{game_id}.html)")
+        try:
+            with page.expect_file_chooser(timeout=10_000) as fc_info:
+                add_btn.click()
+            fc_info.value.set_files(str(Path(file_path).resolve()))
+        except PWTimeout:
+            # fallback: the click may have revealed a lazy input instead of a chooser
+            lazy = page.locator("section#uploads input[type='file']").last
+            try:
+                lazy.wait_for(state="attached", timeout=5_000)
+            except PWTimeout:
+                self.dump(page, f"upload_no_chooser_{game_id}")
+                raise ItchError(
+                    f"file chooser never opened and no file input appeared (dumped upload_no_chooser_{game_id}.html)"
+                )
+            lazy.set_input_files(str(Path(file_path).resolve()))
+
+        # the row lands in the list widget once the XHR upload completes (11 MB takes a bit)
+        deadline = time.time() + 180
+        while time.time() < deadline:
+            if row_state().get("present"):
+                break
+            time.sleep(2.0)
+        if not row_state().get("present"):
+            last = row_state()
+            self.dump(page, f"upload_stuck_{game_id}")
+            raise ItchError(
+                f"upload row for {fname} never appeared after 180s "
+                f"(saw {last.get('total')} uploader rows, names={last.get('names')!r}; "
+                f"dumped upload_stuck_{game_id}.html)"
+            )
+
+        # never save/close mid-upload: wait for every in-flight XHR to drain
+        try:
+            page.wait_for_function(
+                """() => !document.querySelector(".game_edit_upload_list_widget .uploader.is_uploading")""",
+                timeout=180_000,
+            )
+        except PWTimeout:
+            self.dump(page, f"upload_drain_timeout_{game_id}")
+            raise ItchError(f"uploads still in flight after 180s (dumped upload_drain_timeout_{game_id}.html)")
+
+        state = row_state()
+
+        # rows render collapsed after a reload -- "More..." expands the advanced
+        # fields (incl. the embed checkbox); a freshly uploaded row already shows it
+        if not state.get("embed_present"):
+            more_btn = page.locator(
+                ".game_edit_upload_list_widget .uploader:has-text("
+                f"'{fname}') .upload_tools .more_btn"
+            ).first
+            if not more_btn.count():
+                self.dump(page, f"upload_no_more_btn_{game_id}")
+                raise ItchError(f"no More... button on the {fname} row (dumped upload_no_more_btn_{game_id}.html)")
+            more_btn.click()
+            page.wait_for_timeout(600)
+            state = row_state()
+            if not state.get("embed_present"):
+                self.dump(page, f"upload_no_embed_{game_id}")
+                raise ItchError(f"no [embed] checkbox on the {fname} row even after More... (dumped upload_no_embed_{game_id}.html)")
+
+        # check "This file will be played in the browser" (left unchecked by itch)
+        embed = page.locator(
+            ".game_edit_upload_list_widget .uploader:has-text("
+            f"'{fname}') input[name$='[embed]']"
+        ).first
+        if not embed.is_checked():
+            lbl = page.locator(
+                ".game_edit_upload_list_widget .uploader:has-text("
+                f"'{fname}') label:has(input[name$='[embed]'])"
+            ).first
+            (lbl if lbl.count() else embed).click()
+            page.wait_for_timeout(800)
+            if not embed.is_checked():
+                page.evaluate(
+                    """(el) => { el.checked = true; el.dispatchEvent(new Event('change', {bubbles: true})); }""",
+                    embed.element_handle(),
+                )
+
+        save = self._save_button(page, context="uploads")
+        save.click()
+        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_timeout(1500)
+
+        # verify against a fresh load of the edit page (rows rebuild client-side)
+        self._goto_edit(page, game_id)
+        wait_widget_init()
+        state = row_state()
+        if not state.get("present"):
+            self.dump(page, f"upload_not_saved_{game_id}")
+            raise ItchError(f"{fname} is not on the reloaded uploads list (dumped upload_not_saved_{game_id}.html)")
+        if not state.get("embed_checked"):
+            # collapsed rows hide the checkbox but its checked state is knowable
+            # only when rendered -- expand, then re-read
+            more_btn = page.locator(
+                ".game_edit_upload_list_widget .uploader:has-text("
+                f"'{fname}') .upload_tools .more_btn"
+            ).first
+            if more_btn.count():
+                more_btn.click()
+                page.wait_for_timeout(600)
+                state = row_state()
+        if not state.get("embed_checked"):
+            self.dump(page, f"upload_embed_not_saved_{game_id}")
+            raise ItchError(f"{fname} 'play in browser' did not stick (dumped upload_embed_not_saved_{game_id}.html)")
+        return {"id": game_id, "file": fname, "upload_id": state.get("upload_id"),
+                "play_in_browser": True}
 
     def list_projects(self) -> list[dict[str, Any]]:
         """Parse /dashboard -> titles, edit ids, real url slugs, statuses."""
@@ -805,6 +1018,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("set-kind", help="set 'Kind of project' to HTML")
     p.add_argument("--id", type=int, required=True)
 
+    p = sub.add_parser("upload-html5", help="upload an HTML5 build zip (index.html at root) as playable")
+    p.add_argument("--id", type=int, required=True)
+    p.add_argument("--file", required=True, help="path to the zip (index.html MUST be at the zip root)")
+
     p = sub.add_parser("description", help="set the project description")
     p.add_argument("--id", type=int, required=True)
     p.add_argument("--file", default=None)
@@ -852,6 +1069,10 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(out, indent=2))
         elif args.cmd == "set-kind":
             print(json.dumps(web.set_kind_html(args.id), indent=2))
+        elif args.cmd == "upload-html5":
+            if not Path(args.file).exists():
+                ap.error(f"no such file: {args.file}")
+            print(json.dumps(web.upload_html5(args.id, args.file), indent=2))
         elif args.cmd == "description":
             if not (args.file or args.text):
                 ap.error("description needs --file or --text")

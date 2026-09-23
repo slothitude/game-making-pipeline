@@ -1,0 +1,36 @@
+{
+	"project": "GYRO SQUADRON '45",
+	"study": "Original game inspired by the Strikers 1945 structure (WWII propeller fighters -> covert org -> alien/mecha escalation). Genre-and-structure inspiration only — original ships, names, plot, patterns.",
+	"engine": "Godot 4.7 GDScript, PORTRAIT 540x960 design (vertical shmup), stretch canvas_items/expand, gl_compatibility, native mobile primary (Android/iOS), web secondary",
+	"laws": {
+		"constants_not_magic": "every control/weapon/spawn number is a named const in scripts/feel.gd",
+		"growing_battery": "each subsystem lands with its suite; done = 2x consecutive green",
+		"injectable_input": "ALL steering flows through scripts/tilt_source.gd — device sensor OR synthetic feeder; CI never needs a phone",
+		"original_assets": "Flux/PIL/procedural only"
+	},
+	"controls": {
+		"primary": "tilt -> plane position: Input.get_gravity() absolute orientation (NEVER integrate raw gyro); blend a touch of get_gyroscope() for responsiveness, gravity is the source of truth",
+		"mapping": "tilt X -> plane X (clamped to bounds); v1 ships LEFT/RIGHT tilt only, fixed auto-scroll",
+		"calibration": "capture current tilt as neutral on level start + RECENTER tap; stored per session",
+		"dead_zone": 0.06,
+		"curve": "quadratic response: output = sign(x) * x^2 beyond the dead zone — precise center, fast edges",
+		"sensitivity": 1.6,
+		"fallback": "touch-drag from day one (setting toggle; also how the editor/emulator plays)",
+		"fire": "auto-fire always on (tilt owns the hands); tap-anywhere = bomb? no — BOMB is a dedicated on-screen button"
+	},
+	"weapons": {
+		"main": {"fire_rate": 8.0, "bullet_speed": 700.0, "tiers": 4},
+		"super_shot": {"charge_from_kills": 12, "duration": 1.6, "normal_fire_suspended": true},
+		"bomb": {"start_count": 2, "screen_clear": true, "flavor": "act1 carpet-bomb / act3 orbital pulse"}
+	},
+	"powerups": {"weapon_tier pickups_per_tier": 3, "escort_options": "orbiting option planes add fire, max 2, tier-gated"},
+	"acts": [
+		{"id": 1, "tone": "WWII", "enemies": ["fighter_straight", "bomber_slow"], "boss": "bomber_fortress hp 40"},
+		{"id": 2, "tone": "black-budget transition", "enemies": ["unmarked_jet", "energy_turret"], "boss": "proto_mech hp 70 phase2@35"},
+		{"id": 3, "tone": "futuristic", "enemies": ["ufo_scout", "mecha_transform"], "boss": "alien_core hp 120 phase2@60 phase3@30"}
+	],
+	"structure": {"stage_len_target_sec": 55, "boss_longer_than_stage": true, "hit_penalty": "weapon tier -1 (no instant death)", "lives": 3, "difficulties": ["easy", "normal", "hard"]},
+	"scoring": {"per_kill": 50, "no_damage_bonus": 5000, "style_variety_bonus": true},
+	"milestones": ["1 CONTROL PROTOTYPE: tilt abstraction + calibration + dead zone + curve + clamp + touch fallback + synthetic tests", "2 Act1 slice: weapons + 2 enemies + boss1", "3 powerups + escorts", "4 Act2 content", "5 Act3 + final boss", "6 full synthetic verify pass"],
+	"art_direction": "top-down WWII-to-sci-fi planes, chunky cartoon-outline sprites, banking sprites (bank_left/bank_right) for tilt readability, parallax sea/cloud tiles per act"
+}

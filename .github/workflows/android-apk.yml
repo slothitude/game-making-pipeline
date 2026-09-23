@@ -1,0 +1,121 @@
+name: Android APK
+
+# Debug-signed Android APK for one game, uploaded as an artifact — aimed at the
+# Firebase Test Lab device farm (todo #94, phase G1). Dispatch picks the game;
+# pushes touching releases/** carry no inputs, so GAME_SLUG falls back to the
+# default below.
+#
+# Debug signing only for now (each game's "Android" preset ships keystore/
+# debug=false, i.e. Godot's default debug keystore — accepted by Test Lab).
+# Release signing lands later; see the commented keystore block at the bottom.
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Game repo to build an APK for (owner: slothitude)"
+        required: true
+        default: octogram-arcade
+        type: choice
+        options:
+          - sonar
+          - slime-line
+          - octogram-arcade
+  push:
+    paths:
+      - 'releases/**'
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Export Android APK
+    runs-on: ubuntu-latest
+    container:
+      # Same reproducible builder image as games-ci.
+      image: docker://barichello/godot-ci:4.7.1
+    env:
+      # Push triggers have no inputs — default to the flagship repo.
+      GAME_SLUG: ${{ inputs.game || 'octogram-arcade' }}
+    steps:
+      # The godot image is minimal: no git, no unzip, no JDK. git for checkout,
+      # unzip for the template tpz, JDK because APK signing runs keytool/
+      # jarsigner (OpenJDK 17 per the Godot Android export docs). Gradle is NOT
+      # needed — these presets use classic APK export (use_gradle_build=false).
+      - name: Install git + unzip + fontconfig + JDK (godot image is minimal)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig openjdk-17-jdk-headless
+
+      # The GMP repo itself: full checkout (no paths worth pruning — this repo
+      # is small by law).
+      - name: Checkout GMP (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout game repo into ./game
+        uses: actions/checkout@v4
+        with:
+          repository: slothitude/${{ env.GAME_SLUG }}
+          token: ${{ secrets.GAMES_TOKEN }} # cross-repo read; PAT with repo scope (see README)
+          path: game
+          submodules: false
+
+      # Same bootstrap as games-ci: this image ships the editor only, and the
+      # Android templates ride in the same tpz as the Web ones. The image is
+      # pinned to 4.7.1, so this resolves 4.7.1.stable every time.
+      - name: Bootstrap export templates (4.7.1-stable)
+        run: |
+          set -e
+          V="$(godot --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)"
+          TPL_DIR="${HOME}/.local/share/godot/export_templates/${V}.stable"
+          if [ ! -d "${TPL_DIR}" ]; then
+            echo "Downloading export templates for Godot ${V}..."
+            curl -fsSL -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${V}-stable/Godot_v${V}-stable_export_templates.tpz"
+            unzip -q -o /tmp/templates.tpz -d /tmp/templates
+            mkdir -p "${TPL_DIR}"
+            mv /tmp/templates/templates/* "${TPL_DIR}/"
+          else
+            echo "Templates for ${V} already present."
+          fi
+
+      # Import once so .godot/imported exists before the export.
+      - name: Import project
+        run: godot --headless --path game --import
+
+      # Classic APK export (no gradle) against the game's "Android" preset.
+      # Godot mints ~/.android/debug.keystore with keytool on first use, so the
+      # result is debug-signed — exactly what Test Lab wants for phase G1.
+      - name: Export Android APK
+        run: |
+          cd game
+          godot --headless --export-release "Android" "builds/${GAME_SLUG}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME_SLUG }}-apk
+          path: game/builds/*.apk
+          if-no-files-found: error
+
+      # ------------------------------------------------------------------
+      # RELEASE SIGNING (later) — debug signing is fine for Test Lab, but a
+      # Play release needs a real keystore. Two moves, when it's time:
+      #
+      # 1) Decode the base64 keystore into the job (add BEFORE the export
+      #    step), with secrets ANDROID_KEYSTORE_BASE64 loaded:
+      #
+      #    - name: Decode release keystore from secrets
+      #      env:
+      #        ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      #      run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
+      #
+      # 2) Flip each game's preset to the custom release keystore:
+      #    keystore/release="/tmp/release.keystore"
+      #    keystore/release_user="<alias>"
+      #    keystore/release_password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+      #
+      # (keystore/debug stays false — the default debug keystore keeps serving
+      # Test Lab runs untouched.)
+      # ------------------------------------------------------------------

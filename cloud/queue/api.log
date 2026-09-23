@@ -1,0 +1,29 @@
+[queue_api] backend=sqlite ready at C:\Users\aaron\game-making-pipeline\cloud\queue\test.db
+[queue_api] listening on http://127.0.0.1:8901 token=***/ backend=sqlite
+[queue_api] GET /health -> ok, {}
+[queue_api] GET /health -> ok, {}
+[queue_api] GET /jobs -> 403 (bad token from 127.0.0.1)
+[queue_api] POST /jobs type=deploy priority=9 -> id=1
+[queue_api] POST /jobs type=llm priority=1 -> id=2
+[queue_api] POST /jobs type=gate priority=5 -> id=3
+[queue_api] POST /jobs/claim -> claimed id=2 type=llm priority=1
+[queue_api] POST /jobs/claim -> claimed id=3 type=gate priority=5
+[queue_api] POST /jobs/claim -> claimed id=1 type=deploy priority=9
+[queue_api] POST /jobs/2/result -> done
+[queue_api] POST /jobs/3/result -> requeued for retry (attempt 1/2)
+[queue_api] POST /jobs/claim -> claimed id=3 type=gate priority=5
+[queue_api] POST /jobs/3/result -> FAILED permanently (attempt 2/2)
+[queue_api] GET /jobs status=any limit=10 -> 3 jobs
+[queue_api] POST /jobs/1/result -> done
+[queue_api] POST /jobs type=critique priority=2 -> id=4
+[queue_api] GET /health -> ok, {'done': 2, 'failed': 1, 'queued': 1}
+[queue_api] POST /jobs/claim -> claimed id=4 type=critique priority=2
+[queue_api] POST /jobs/4/result -> FAILED permanently (attempt 1/2) [permanent]
+[queue_api] POST /jobs type=llm priority=3 -> id=5
+[queue_api] GET /health -> ok, {'done': 2, 'failed': 2, 'queued': 1}
+[queue_api] POST /jobs/claim -> claimed id=5 type=llm priority=3
+[queue_api] POST /jobs/5/result -> done
+[queue_api] GET /health -> ok, {'done': 3, 'failed': 2}
+[queue_api] POST /jobs/claim types=['llm', 'device_test', 'gpu', 'gate', 'deploy', 'emulator', 'critique'] -> nothing queued
+[queue_api] GET /health -> ok, {'done': 3, 'failed': 2}
+[queue_api] GET /jobs status=any limit=10 -> 5 jobs

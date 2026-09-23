@@ -1,1 +1,3 @@
 cloud/.env
+cloud/mcp/.token
+daily/__pycache__/
