@@ -105,6 +105,8 @@ jobs:
           package/name="${GAME_SLUG}"
           package/signed=true
           screen/immersive_mode=true
+          include_filter=""
+          exclude_filter=""
           EOF
             echo "Injected Android preset (${SEC}) into workspace export_presets.cfg."
           fi
@@ -199,6 +201,9 @@ jobs:
           ANDROID_HOME: /usr/lib/android-sdk
         run: |
           cd game
+          # godot 4.7 does NOT mkdir the CLI export path's folder — run 35813303304
+          # died on 'Target folder does not exist or is inaccessible: "builds"'.
+          mkdir -p builds
           godot --headless --export-debug "Android" "builds/${GAME_SLUG}.apk"
 
       - name: Upload APK artifact
