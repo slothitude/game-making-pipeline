@@ -1,0 +1,20 @@
+{
+  "decisions": 7,
+  "action_histogram": {
+    "tap_center": 3,
+    "tap_left": 2,
+    "wait": 1,
+    "tap_right": 1
+  },
+  "distinct_contexts": 5,
+  "forced_taps": 0,
+  "vision_calls": 0,
+  "vision_fallbacks": 0,
+  "elapsed_s": 13.1,
+  "game": "fixturevision",
+  "url": "http://127.0.0.1:8137/fixture_any.html",
+  "context_mode": "vision",
+  "scorer": "module:fake_zone_scorer.py",
+  "brain": "verify-root\\brains\\generic-v1.npz",
+  "record": true
+}

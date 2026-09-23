@@ -42,9 +42,9 @@ import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-JOB_TIMEOUT_SEC = 15 * 60          # hard cap: a free-tier slot must never be wedged
+JOB_TIMEOUT_SEC = int(__import__("os").environ.get("GMP_JOB_TIMEOUT_SEC", "48")) * 60  # cold chains need the long window; env-tunable
 POLL_SEC = 15                      # result.json download retry cadence
-REMOTE_BASE = "/content/gmp_job"   # where in.zip/out.zip live on the runtime
+REMOTE_BASE = ""  # root-level names: subdir uploads 500 on fresh runtimes (probed 2026-09-23)
 AUTH_MARKERS = ("401", "403", "unauthorized", "forbidden", "credential",
                 "permission", "scope", "auth")
 
@@ -100,13 +100,44 @@ class Colab:
 
     # --- real-command wrappers (see module docstring for the source) ---
     def new(self, gpu):
-        return self.run("new", "-s", self.session, "--gpu", gpu)
+        rc, out = self.run("new", "-s", self.session, "--gpu", gpu)
+        # fresh runtimes serve their content API before it's ready; give it a beat
+        time.sleep(20)
+        return rc, out
 
     def upload(self, local, remote):
-        return self.run("upload", "-s", self.session, str(Path(local).as_posix()), remote)
+        # cold content-API 500s: back off and retry before giving up
+        last = ""
+        for attempt in range(4):
+            rc, out = self.run("upload", "-s", self.session,
+                               str(Path(local).as_posix()), remote)
+            if rc == 0 and "500" not in out and "Internal Server Error" not in out:
+                return rc, out
+            last = out
+            log(f"upload attempt {attempt + 1} failed ({out[-120:]}); backing off")
+            time.sleep(20 * (attempt + 1))
+        return 1, last
 
     def exec_script(self, local_script):
-        return self.run("exec", "-s", self.session, "-f", str(Path(local_script).as_posix()))
+        # Probed 2026-09-23: `exec -f FILE` breaks (kernel launcher rejects its
+        # own -f) AND long stdin breaks the same way — only SHORT stdin execs
+        # cleanly. So: upload the script as a root-level file (uploads work),
+        # then exec the one-line bootstrap that runs it. Same deadline law.
+        name = "gmp_runner.py"
+        rc, out = self.upload(local_script, name)
+        if rc != 0:
+            return rc, out
+        code = 'import os; os.chdir("/"); exec(open("/gmp_runner.py").read())'
+        budget = max(5.0, self.deadline - time.monotonic())
+        try:
+            proc = subprocess.run(
+                [self.exe, "exec", "-s", self.session], input=code,
+                capture_output=True, timeout=budget,
+                encoding="utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            raise _CliFailed("timeout", "exec bootstrap",
+                             f"no completion within {budget:.0f}s (job deadline)")
+        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
     def download(self, remote, local):
         return self.run("download", "-s", self.session, remote, str(Path(local).as_posix()),
@@ -141,9 +172,10 @@ def run_job(job: dict) -> dict:
         return _err("bad_job", "run_job(job: dict) — got " + type(job).__name__)
     jtype = job.get("type", "")
     runner_name = {"gpu.train": "train.py", "gpu.mesh": "mesh.py",
-                   "gpu.render": "render.py"}.get(jtype)
+                   "gpu.render": "render.py", "gpu.anim": "anim.py",
+                   "gpu.audio": "audio.py"}.get(jtype)
     if not runner_name:
-        return _err("bad_job", f"type must be one of {sorted({'gpu.train', 'gpu.mesh', 'gpu.render'})}",
+        return _err("bad_job", f"type must be one of {sorted({'gpu.train', 'gpu.mesh', 'gpu.render', 'gpu.anim', 'gpu.audio'})}",
                     got=jtype)
     staging = Path(job.get("staging_dir", ""))
     return_dir = Path(job.get("return_dir", ""))
@@ -203,7 +235,7 @@ def run_job(job: dict) -> dict:
         log(f"runtime up ({gpu})")
 
         # 3. upload inputs, 4. execute the runner (exec -f ships the LOCAL script)
-        rc, out = cli.upload(inzip, f"{REMOTE_BASE}/in.zip")
+        rc, out = cli.upload(inzip, "in.zip")
         if rc != 0:
             return _err("upload_failed", "run colab auth", detail=out.strip()[-400:],
                         session=session)
@@ -219,7 +251,7 @@ def run_job(job: dict) -> dict:
         # for result.json so both sync and async exec semantics converge)
         result_local = tmp / "result.json"
         while True:
-            rc, _ = cli.download(f"{REMOTE_BASE}/result.json", result_local)
+            rc, _ = cli.download("result.json", result_local)
             if rc == 0 and result_local.exists():
                 break
             if time.monotonic() > deadline:
@@ -230,7 +262,7 @@ def run_job(job: dict) -> dict:
             time.sleep(POLL_SEC)
 
         outzip = tmp / "out.zip"
-        rc, out = cli.download(f"{REMOTE_BASE}/out.zip", outzip)
+        rc, out = cli.download("out.zip", outzip)
         if rc == 0 and outzip.exists():
             (return_dir / "out").mkdir(exist_ok=True)
             with zipfile.ZipFile(outzip) as z:

@@ -1,0 +1,46 @@
+{
+	"project": "STAR VISITOR",
+	"study": "Systems study of Alien Hominid (Flash, 2002, The Behemoth) — mechanics and genre research only. All assets original. Nothing from the source game is copied.",
+	"engine": "Godot 4.7 GDScript, phone-first optional (this game is landscape 960x540 design, stretch canvas_items/expand), gl_compatibility",
+	"laws": {
+		"constants_not_magic": "every movement/combat number is a named const in scripts/feel.gd (LLM-verb-modulatable)",
+		"growing_battery": "each subsystem lands with its own test suite; nothing is done until its suite passes twice consecutively",
+		"headless_replays": "verify-retry drives the real scene tree with scripted InputEvent replays (walk-right-and-shoot run; do-nothing run for soft-locks)",
+		"original_assets": "sprites/audio generated (Flux/PIL/procedural); no source-game material"
+	},
+	"movement": {
+		"run_speed": 260.0,
+		"jump_velocity": -420.0,
+		"gravity": 1100.0,
+		"duck": true,
+		"shoot_directions_grounded": ["forward", "up", "forward-up"],
+		"shoot_directions_airborne": ["forward", "up", "forward-up", "down"]
+	},
+	"weapons": {
+		"pistol": {"ammo": "infinite", "bullet_cap_on_screen": 3, "bullet_speed": 620.0, "chargeable": true, "charge_time": 0.8},
+		"ammo_types": {
+			"fire": {"bonus_damage": 1, "duration_hits": 12, "note": "longer enemy death anim"},
+			"big": {"damage_mult": 2, "pierce": 2, "duration_hits": 8}
+		},
+		"grenades": {"start_count": 3, "arc": true, "throw_velocity": [180, -320]}
+	},
+	"signature_systems": {
+		"enemy_ride": "Down+Jump above an enemy mounts it; mount flails blinded; friendly fire hits the mount; bite scares nearby enemies; flip-and-throw",
+		"burrow": "hold Down on ground: invulnerable, can drag enemies under, suffocation timer 4.0s kills the player; uncovers occasional extra life"
+	},
+	"enemies": {
+		"roster_v1": [
+			{"id": "agent", "hp": 1, "speed": 90.0, "behavior": "advance + stop-and-shoot", "bullet_one_hits_player": true},
+			{"id": "agent_heavy", "hp": 3, "speed": 60.0, "behavior": "advance + burst-fire 3"}
+		],
+		"bosses_v1": [
+			{"id": "miniboss_robot", "hp": 30, "pattern": ["stomp shockwave", "laser sweep"], "phase2_at_hp": 15},
+			{"id": "boss_vehicle", "hp": 60, "pattern": ["missile arc", "dash", "vulnerable window"], "phase2_at_hp": 25}
+		]
+	},
+	"player": {"lives_start": 10, "one_hit_death": true, "respawn_iframes": 1.5},
+	"scoring": {"per_kill": 100, "boss_bonus": 2000, "style_bonus": "riding/throwing/burrowing variety adds style points; every 5000 style = +1 life"},
+	"beat_sheet_v1": ["wave1 agents x6", "miniboss_robot", "wave2 agents+heavies x10", "boss_vehicle", "level_clear_tally"],
+	"milestones": ["A: controller+pistol+agent+test room", "B: ride+burrow+style stub", "C: miniboss+wave spawner", "D: boss_vehicle+clear tally", "E: end-to-end replay pass"],
+	"art_direction": "chunky hand-drawn cartoon 2D, bold outlines, flat colors; v1 static sprites + programmatic squash/stretch tweens (frame-by-frame animation budgeted later)"
+}

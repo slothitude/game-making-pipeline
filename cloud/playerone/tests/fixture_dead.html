@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fixture_dead</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #202838; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="800"></canvas>
+<script>
+// The anti-stuck fixture: a page that never animates and ignores every
+// input. Pixels mode reads "motion none" forever, the fake brain parks on
+// wait, and the player's anti-stuck law must start forcing taps.
+const cx = document.getElementById('game').getContext('2d');
+cx.fillStyle = '#202838';
+cx.fillRect(0, 0, 480, 800);
+cx.fillStyle = '#8899aa';
+cx.font = '26px monospace';
+cx.fillText('dead page', 170, 390);
+cx.font = '15px monospace';
+cx.fillText('input ignored by design', 130, 420);
+</script>
+</body>
+</html>

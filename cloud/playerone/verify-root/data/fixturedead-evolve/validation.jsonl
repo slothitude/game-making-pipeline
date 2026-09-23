@@ -1,0 +1,1 @@
+{"context": "motion none | dark mid | frozen center | frame 11", "options": ["tap_center", "tap_left", "tap_right", "tap_top", "tap_bottom", "swipe_up", "swipe_down", "swipe_left", "swipe_right", "wait"], "action": "wait"}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAPPY — The GPU Box Services</title>
+<meta name="description" content="Every web service on Lappy, the Pipeline's GPU satellite — emulators, media, AI, ops.">
+<style>
+  :root { --bg:#070c1c; --panel:#101a30; --panel-hi:#182648; --ink:#e6ecfb; --dim:#93a1c4;
+          --gold:#ffd76e; --cyan:#6fd3e8; --green:#7ee787; --red:#ff6b6b; --mono:"Courier New",monospace; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:radial-gradient(1200px 800px at 50% -12%, #16244a 0%, rgba(22,36,74,0) 62%), var(--bg);
+         color:var(--ink); font-family:Verdana,Geneva,sans-serif; font-size:15px; line-height:1.55; min-height:100vh; }
+  .wrap { max-width:1100px; margin:0 auto; padding:48px 16px 80px; }
+  h1 { font-family:Arial Black,sans-serif; font-size:clamp(28px,6vw,52px); text-transform:uppercase; letter-spacing:.02em;
+       background:linear-gradient(100deg,#f7c94b,#fff6d0 32%,#ffd76e 46%,#ffe9a8 80%,#7a5210);
+       -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub { font-family:var(--mono); color:var(--cyan); letter-spacing:.28em; font-size:13px; margin:10px 0 8px; }
+  .desc { color:var(--dim); max-width:640px; margin:14px 0 34px; }
+  .desc strong { color:var(--gold); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .card { background:linear-gradient(180deg,var(--panel-hi),var(--panel)); border:2px solid; border-color:#283a66 #050a14 #050a14 #283a66;
+          border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:8px; }
+  .card .tag { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; }
+  .card h2 { font-size:18px; font-family:Arial Black,sans-serif; }
+  .card p { color:var(--dim); font-size:13px; flex:1; }
+  .pill { display:inline-block; font-family:var(--mono); font-size:11px; padding:3px 10px; border-radius:99px;
+          border:1px solid var(--green); color:var(--green); width:fit-content; }
+  .pill.local { border-color:var(--gold); color:var(--gold); }
+  a.btn { display:block; text-align:center; text-decoration:none; font-family:var(--mono); font-weight:bold; font-size:13px;
+          color:#241a05; background:linear-gradient(180deg,#fff0bd,#ffd76e 46%,#d9a93c); border-radius:8px; padding:11px; }
+  a.btn:hover { filter:brightness(1.07); }
+  a.btn.ghost { background:none; border:1px solid var(--cyan); color:var(--cyan); }
+  footer { margin-top:48px; font-family:var(--mono); font-size:12px; color:#5d6b8f; }
+  footer a { color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sub">SLOTHITUDE INFRASTRUCTURE // SATELLITE</div>
+  <h1>Lappy Services</h1>
+  <p class="desc">The GPU box: RTX 3060, the Pipeline's play-and-render satellite.
+    Public doors run through the <strong>Tailscale Funnel</strong> tunnel; LAN doors are for the home network.</p>
+
+  <div class="grid">
+
+    <div class="card">
+      <span class="tag" style="color:var(--cyan)">RETRO ARCADE</span>
+      <h2>🎮 EmulatorJS</h2>
+      <p>NES · SNES · GBA · N64 · PSX · arcade — the Seagate's full ROM library in the browser. 406 NES carts alone. PlayerOne's retro training ground.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/">▶ OPEN ARCADE</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:var(--green)">AI CHAT</span>
+      <h2>🧠 OpenWebUI</h2>
+      <p>The Pipeline's chat front door on the GPU box — wired to the NVIDIA brain ladder and openrouter/free workers.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/chat/">🧠 OPEN CHAT</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:#b691ff">MEDIA</span>
+      <h2>🎬 Jellyfin</h2>
+      <p>Movies · music · media from the Seagate, streamed anywhere.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/media/web/">🎬 OPEN MEDIA</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:var(--red)">OPS</span>
+      <h2>⚓ Portainer</h2>
+      <p>Every container on the box, one dashboard. The ops cockpit.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/portainer/">⚓ OPEN COCKPIT</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:#ffa14e">GPU</span>
+      <h2>🎨 ComfyUI</h2>
+      <p>The RTX 3060's generative workbench — TRELLIS meshes, Hunyuan renders.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/comfy/">🎨 OPEN WORKBENCH</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:var(--cyan)">SEARCH</span>
+      <h2>🔎 SearXNG</h2>
+      <p>Self-hosted metasearch — the Pipeline's private research engine.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/search/">🔎 OPEN SEARCH</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:var(--green)">CODE</span>
+      <h2>🦊 Forgejo (Lappy)</h2>
+      <p>The original git forge — repos, history, the old workshop.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/forgejo/">🦊 OPEN FORGE</a>
+    </div>
+
+    <div class="card">
+      <span class="tag" style="color:#b691ff">READER</span>
+      <h2>📜 Jina Reader</h2>
+      <p>URL → clean markdown. The factory's reading room.</p>
+      <span class="pill">WEB · LOGIN REQUIRED</span>
+      <a class="btn" href="https://lappy-ubuntu.tail7c489f.ts.net/reader/">📜 OPEN READER</a>
+    </div>
+
+  </div>
+
+  <footer>
+    Lappy · RTX 3060 satellite · tunnel <a href="https://lappy-ubuntu.tail7c489f.ts.net">lappy-ubuntu.tail7c489f.ts.net</a>
+    · part of <a href="/">Slothitude Games</a> · the brain is on <a href="/make.html">retromonkey</a>
+  </footer>
+</div>
+</body>
+</html>

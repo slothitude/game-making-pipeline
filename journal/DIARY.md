@@ -122,4 +122,18 @@ The Pipeline submitted both jam games autonomously: SONAR to TFS (It Came From B
 
 The first 3D game's cube taxonomy is complete: gray/black/green, the ABSOLUTE, field shrink, death by black cube, all proven green twice. The agent even caught that the spawner had no wave cap — a real design bug the battery tests couldn't see, fixed and locked with a new check. Meanwhile SONAR's sprite issue was traced to a stale import cache — clean re-import and re-export pushed to itch as v1.1.
 
+---
+
+## 2026-09-23 11:45 — POWDER RUN M1 green — the slope and the skier
+
+Backlog #1 opened: SkiFree systems study, original everything. 5-heading skier with drift-eased steering (no teleport law as integration, not position writes), world scrolling up past a fixed skier, touch-x + arrow intents, pine tumble death, instant retry. The replay autopilot caught the spawner producing unwinnable rows — the safe-lane walk law (clear lane, moves ≤1 lane/row) was born there; the battery caught Array.shuffle() breaking spawner determinism via the global RNG and a snapshot counter that capped dodges at 2. Art went Flux: 6/6 first-attempt accepts, one extra key pass for enclosed magenta pockets, one screenshot-caught fix for letterboxed sprites and a 64px ground tile on a 480px screen. Wall: 66x2 + 16x2, quit-after clean.
+
+---
+
+## 2026-09-23 13:50 — powder-run M2 — the field and the score
+
+BOULDER/SLAB/SIGN joined the field with the spawner bands and the speed ramp. The design law that held it together: drift and steer response both scale by speed/SPEED_BASE, so the min-gap winnability invariant survives the ramp by construction. The battery caught the replay's hunt guard aborting mid-approach (commit law fixed it), a real 10% boulder dry-spell (act layout fixed it), and — via the quit-after gate alone — an empty global script class cache that all four test suites masked. Flux art: 2 first-attempt accepts, sign took 2 (dark-magenta shadow leak; post_art now keys magenta at any lightness). Wall: m1 67+16, m2 82+28, all x2, import clean, --quit-after 120 silent.
+
+![powder-run M2 — the field and the score](images/powder_m2_field.png)
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*

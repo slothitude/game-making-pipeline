@@ -1487,6 +1487,7 @@
   <div class="hero-cta">
     <a class="btn-coin" href="#games"><span class="blink">&#9654;</span> INSERT COIN</a>
     <a class="btn-ghost" href="/make.html">&#127918; MAKE A NEW GAME</a>
+    <a class="btn-ghost" href="/lappy.html">&#127918; LAPPY SERVICES</a>
     <a class="btn-ghost" href="/diary/">READ THE DIARY</a>
   </div>
   <div class="scroll-hint" aria-hidden="true">&#9660;</div>
@@ -1510,7 +1511,7 @@
 <section class="sec" id="games">
   <div class="wrap">
     <div class="sec-head"><h2 class="gilt">THE GAMES</h2><div class="sec-rule"></div></div>
-    <p class="sec-sub">&#9654; SELECT YOUR GAME <span class="dim">//</span> 3 PLAYABLE NOW <span class="amber">//</span> 3 IN THE OVEN</p>
+    <p class="sec-sub">&#9654; SELECT YOUR GAME <span class="dim">//</span> 4 PLAYABLE NOW <span class="amber">//</span> 3 IN THE OVEN</p>
     <div class="grid" id="grid">
 
       <article class="card" data-tilt style="--theme:#ffd76e; --theme-rgb:255,215,110; --i:0;">
@@ -1602,7 +1603,7 @@
           </div>
           <div class="card-copy with-actions">
             <h3>Star Visitor</h3>
-            <p class="tag">Ride enemies, burrow, spell</p>
+            <p class="tag">Ride enemies, burrow, spell &mdash; slice C green</p>
           </div>
           <div class="card-actions">
             <span class="btn btn-play" role="button" tabindex="0" data-embed="/games/star-visitor/" data-title="Star Visitor">&#9654; Play Now</span>
@@ -1615,10 +1616,9 @@
         <div class="card-inner">
           <span class="card-num">#05</span>
           <div class="card-corner">
-            <span class="ver-pill">v0.3-dev</span>
+            <span class="ver-pill">v0.3</span>
             <span class="critique-badge" data-slug="gyro-squadron-45"></span>
           </div>
-          <span class="ribbon dev">&#128295; IN DEVELOPMENT</span>
           <div class="art-wrap">
             <img class="art" src="gyro_squadron.png" alt="Gyro Squadron '45 key art" width="1024" height="1024" loading="lazy" decoding="async">
             <div class="art-fade"></div>
@@ -1658,11 +1658,45 @@
           </div>
           <div class="card-copy with-actions">
             <h3>Cubefall</h3>
-            <p class="tag">3D puzzle: rolling cubes</p>
+            <p class="tag">3D puzzle: rolling cubes &mdash; M2 green, M3 building</p>
           </div>
           <div class="card-actions">
             <span class="btn btn-soon">&#9724; Coming Soon</span>
             <a class="btn-mini" href="/diary/cubefall/" title="Read the dev diary">&#128214; Diary</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" data-tilt style="--theme:#a8e6ff; --theme-rgb:168,230,255; --i:6;">
+        <div class="card-inner">
+          <span class="card-num">#07</span>
+          <div class="card-corner">
+            <span class="ver-pill">v0.0-dev</span>
+            <span class="critique-badge" data-slug="powder-run"></span>
+          </div>
+          <span class="ribbon dev">&#128295; IN DEVELOPMENT</span>
+          <div class="art-wrap">
+            <div class="art-placeholder" role="img" aria-label="POWDER RUN &mdash; the SkiFree study, key art not rendered yet">
+              <svg class="cube-svg" viewBox="0 0 120 130" aria-hidden="true">
+                <polygon points="120,34 120,130 0,130 0,112" fill="#eaf6ff"/>
+                <polygon points="120,34 120,130 52,130" fill="#c9e4ff"/>
+                <polygon points="20,84 30,104 10,104" fill="#2f6b3a"/>
+                <polygon points="36,94 45,112 27,112" fill="#234f2c"/>
+                <polygon points="88,62 94,76 82,76" fill="#ff5a5a"/>
+                <polygon points="66,88 98,80 100,87 68,95" fill="#8f4a12"/>
+              </svg>
+              <span class="art-tag">KEY ART RENDERING&#8230;</span>
+            </div>
+            <div class="art-fade"></div>
+            <div class="sheen"></div>
+          </div>
+          <div class="card-copy with-actions">
+            <h3>POWDER RUN</h3>
+            <p class="tag">daily remake #1 &mdash; the SkiFree study</p>
+          </div>
+          <div class="card-actions">
+            <span class="btn btn-soon">&#9724; Coming Soon</span>
+            <span class="btn-mini" style="opacity:0.45; cursor:default;" title="The diary opens after the first playable">&#128214; Diary Soon</span>
           </div>
         </div>
       </article>
@@ -1676,7 +1710,7 @@
   <div class="wrap">
     <div class="sec-head"><h2 class="gilt">THE PIPELINE</h2><div class="sec-rule"></div></div>
     <p class="sec-sub">HOW A GAME HAPPENS WITH ZERO HUMAN HOURS</p>
-    <div class="flow-now" id="flow-now" aria-live="polite"><span class="fn-dot" aria-hidden="true"></span><span id="flow-now-text">PIPELINE IDLE &#8212; WAITING FOR THE NEXT DEPLOY</span></div>
+    <div class="flow-now" id="flow-now" aria-live="polite"><span class="fn-dot" aria-hidden="true"></span><span id="flow-now-text">THE QUEUE IS LIVE &#8212; POSTGRES, ONE JOB AT A TIME &middot; HEAVY JOBS OFFLOAD TO GOOGLE</span></div>
     <div class="flow-wrap js-reveal">
       <div class="flow-scroll">
         <svg class="flow" viewBox="0 0 1000 240" role="img" aria-label="Pipeline flow diagram: spec, art, code, test, ship, play">
@@ -1838,6 +1872,12 @@
       <span class="lp-pill">GAMES HOSTED <b id="lp-hosted">&mdash;</b></span>
       <span class="lp-pill">PLAYTESTS <b id="lp-playtests">&mdash;</b></span>
       <span class="lp-pill">FIXES FILED <b id="lp-fixes">&mdash;</b></span>
+      <span class="lp-pill ok"><i class="lp-dot" aria-hidden="true"></i>QUEUE <b>POSTGRES LIVE &mdash; ONE JOB AT A TIME</b></span>
+      <span class="lp-pill ok"><i class="lp-dot" aria-hidden="true"></i>OFFLOADS <b>TEST LAB &middot; COLAB CLI &middot; CLOUD RUN</b></span>
+      <span class="lp-pill ok"><i class="lp-dot" aria-hidden="true"></i>API + MCP DOOR <b>OPEN &mdash; AGENTS CAN CONNECT</b></span>
+      <span class="lp-pill ok"><i class="lp-dot" aria-hidden="true"></i>BRAIN LADDER <b>NEMOTRON-3-ULTRA-550B BOSS &middot; DEEPSEEK BACKUP &middot; WEEKLY AUTO-REFRESH</b></span>
+      <span class="lp-pill ok"><i class="lp-dot" aria-hidden="true"></i>PLAYERONE FINDING <b>HUMAN-TRAINED = 2.5&times; ON HUMAN PLAY VS SCRIPTED</b></span>
+      <span class="lp-pill"><i class="lp-dot" aria-hidden="true"></i>RALPH LOOP <b>INCOMING</b></span>
     </div>
     <p class="lp-updated" id="lp-updated">telemetry: connecting&#8230;</p>
   </div>
@@ -1895,6 +1935,7 @@
               <option value="star-visitor">star-visitor</option>
               <option value="gyro-squadron-45">gyro-squadron-45</option>
               <option value="cubefall">cubefall</option>
+              <option value="powder-run">powder-run</option>
             </select>
           </div>
           <div class="aq-field off" id="aq-ms-field">
@@ -1912,7 +1953,7 @@
         </div>
         <div class="aq-actions">
           <button class="aq-dispatch" id="aq-dispatch" type="submit">&#9889; DISPATCH</button>
-          <span class="aq-note" id="aq-note">landed on the queue file the agent daemon drains</span>
+          <span class="aq-note" id="aq-note">landed on the Postgres queue &mdash; one job at a time</span>
         </div>
       </form>
 
@@ -2699,9 +2740,10 @@ Current games and their status:
 - Octogram Arcade (3-in-1 word games) — v1.0 — fun: 5/10, phone UX: 4/10
 - SONAR (submarine ping game) — v1.1 — TFS Jam entry, "It Came From Below"
 - SLIME LINE (slug word game) — v1.0 — Humboldt Jam entry, "Slugs n' Bugs"
-- STAR VISITOR (run-and-gun) — v0.2 (in development)
-- GYRO SQUADRON '45 (tilt shooter) — v0.3 (in development)
-- CUBEFALL (3D puzzle) — v0.2 (in development)
+- STAR VISITOR (run-and-gun) — slices A-C green (in development)
+- GYRO SQUADRON '45 (tilt shooter) — M1-M3 green, on itch.io
+- CUBEFALL (3D puzzle) — M2 green, M3 building
+- POWDER RUN (ski game, daily remake #1) — v0.0-dev, the SkiFree study, M1 building
 
 You WANT to know: what game are they playing? What's wrong? What would they change?`;
 
@@ -3256,7 +3298,7 @@ SIGNAL SERVER: starting up · CHAT: you're in it 📡`;
     var LBL_ANCHOR = { fun: "middle", polish: "start", adhd_friendly: "start", phone_ux: "end", readability: "end" };
     var CX = 75, CY = 64, R = 40;
     var THEME = { "octogram-arcade": "#ffd76e", "sonar": "#6fd3e8", "slime-line": "#7ee787",
-                  "star-visitor": "#b691ff", "gyro-squadron-45": "#ff6b6b", "cubefall": "#ffa14e" };
+                  "star-visitor": "#b691ff", "gyro-squadron-45": "#ff6b6b", "cubefall": "#ffa14e", "powder-run": "#a8e6ff" };
     var TREND = { "improving": { icon: "📈", cls: "up" }, "declining": { icon: "📉", cls: "down" },
                   "stable": { icon: "➡️", cls: "flat" }, "first pass": { icon: "✨", cls: "up" } };
     var NODE = { spec: "fn-spec", art: "fn-art", code: "fn-code", test: "fn-test", ship: "fn-ship", play: "fn-play" };
@@ -3707,7 +3749,7 @@ SIGNAL SERVER: starting up · CHAT: you're in it 📡`;
       { p: 4, name: "PRIORITY 4 · ENHANCEMENTS", color: "#7ee787" }
     ];
     var GAME_COLOR = { "octogram-arcade": "#ffd76e", "sonar": "#6fd3e8", "slime-line": "#7ee787",
-                       "star-visitor": "#b691ff", "gyro-squadron-45": "#ff6b6b", "cubefall": "#ffa14e" };
+                       "star-visitor": "#b691ff", "gyro-squadron-45": "#ff6b6b", "cubefall": "#ffa14e", "powder-run": "#a8e6ff" };
     var fetched = [];
     var overrides = {}; /* id -> status, session-local until /api/todos exists */
 

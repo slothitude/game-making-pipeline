@@ -1,8 +1,38 @@
 {
   "queue": [
-    {"id": 1, "ts": "2026-09-23T04:15", "action": "build_milestone", "game": "cubefall", "milestone": 3, "priority": "high", "status": "queued"},
-    {"id": 2, "ts": "2026-09-23T04:12", "action": "run_critique", "game": "sonar", "priority": "normal", "status": "queued"},
-    {"id": 3, "ts": "2026-09-23T04:08", "action": "deploy_game", "game": "star-visitor", "priority": "low", "status": "completed"},
-    {"id": 4, "ts": "2026-09-23T03:55", "action": "generate_art", "game": "gyro-squadron-45", "priority": "normal", "status": "failed"}
+    {
+      "id": 1,
+      "ts": "2026-09-23T10:19",
+      "action": "build_milestone",
+      "game": "cubefall",
+      "milestone": 3,
+      "priority": "high",
+      "status": "running"
+    },
+    {
+      "id": 2,
+      "ts": "2026-09-23T10:15",
+      "action": "build_milestone",
+      "game": "powder-run",
+      "milestone": 1,
+      "priority": "high",
+      "status": "queued"
+    },
+    {
+      "id": 3,
+      "ts": "2026-09-23T09:41",
+      "action": "new_game",
+      "game": "powder-run",
+      "priority": "high",
+      "status": "completed"
+    },
+    {
+      "id": 4,
+      "ts": "2026-09-23T08:12",
+      "action": "deploy_game",
+      "game": "gyro-squadron-45",
+      "priority": "normal",
+      "status": "completed"
+    }
   ]
 }

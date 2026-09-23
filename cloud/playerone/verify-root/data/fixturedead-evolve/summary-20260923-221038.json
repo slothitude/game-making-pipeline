@@ -1,0 +1,19 @@
+{
+  "decisions": 12,
+  "action_histogram": {
+    "wait": 10,
+    "tap_top": 1,
+    "tap_center": 1
+  },
+  "distinct_contexts": 1,
+  "forced_taps": 2,
+  "vision_calls": 0,
+  "vision_fallbacks": 0,
+  "elapsed_s": 26.9,
+  "game": "fixturedead",
+  "url": "http://127.0.0.1:8137/fixture_dead.html",
+  "context_mode": "pixels",
+  "scorer": "module:fake_zone_scorer.py",
+  "brain": "verify-root\\brains\\generic-v1.npz",
+  "record": true
+}

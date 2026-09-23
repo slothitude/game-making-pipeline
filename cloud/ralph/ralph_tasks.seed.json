@@ -1,0 +1,143 @@
+[
+  {
+    "id": "first-end-to-end-burn",
+    "title": "first-end-to-end-burn (#59)",
+    "kind": "gateway",
+    "params": {
+      "op": "new_game",
+      "name": "First End-to-End Burn",
+      "template": "arcade",
+      "pitch": "Prove the full build -> gate -> critique chain end to end",
+      "requester": "ralph"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "The flagship burn: one new game through the whole loop."
+  },
+  {
+    "id": "asset-packs-per-game",
+    "title": "asset-packs-per-game",
+    "kind": "gateway",
+    "params": {
+      "op": "art",
+      "game": "octogram-arcade",
+      "prompt": "Generate the full art asset pack for the game (sprites, tiles, UI)"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Edit params.game per run; one art order per game, repeat until roster covered."
+  },
+  {
+    "id": "cubefall-M1",
+    "title": "cubefall-M1",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "Milestone M1 of cubefall needs an interactive coding session (design + code + 2x green suites). No gateway operation writes game code; a human or coding agent must do the work, after which Ralph can dispatch critique/deploy."
+  },
+  {
+    "id": "star-visitor-to-itch",
+    "title": "star-visitor-to-itch",
+    "kind": "gateway",
+    "params": {
+      "op": "deploy",
+      "game": "star-visitor",
+      "target": "itch"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Deploy executor refuses past red gates (NO DEPLOY PAST RED law)."
+  },
+  {
+    "id": "cubefall-to-itch",
+    "title": "cubefall-to-itch",
+    "kind": "gateway",
+    "params": {
+      "op": "deploy",
+      "game": "cubefall",
+      "target": "itch"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Deploy executor refuses past red gates (NO DEPLOY PAST RED law)."
+  },
+  {
+    "id": "telegram-bot-wiring",
+    "title": "telegram-bot-wiring",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "Human must create the Telegram bot (BotFather), put TG_TOKEN/TG_CHAT_ID into the gateway environment, and point the bot webhook at the public /api route. No gateway endpoint performs bot wiring."
+  },
+  {
+    "id": "multiplayer-checkers-game",
+    "title": "multiplayer-checkers-game",
+    "kind": "gateway",
+    "params": {
+      "op": "new_game",
+      "name": "Multiplayer Checkers",
+      "template": "remake-backlog",
+      "pitch": "Two-player checkers with online multiplayer",
+      "requester": "ralph"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Checkers game through the standard new_game lane."
+  },
+  {
+    "id": "forgejo-install",
+    "title": "forgejo-install",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "Human must install Forgejo (Docker) on the chosen host, create the org/repos, and record credentials. Infrastructure install - no gateway endpoint covers it."
+  },
+  {
+    "id": "emulator-playtest-wiring",
+    "title": "emulator-playtest-wiring",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "Needs the emulator executor wired in cloud/queue/router.py EXECUTORS (Android AVD gmp-atd on the queue host). Code change on the box - not dispatchable through the API."
+  },
+  {
+    "id": "playerone-daemon-integration",
+    "title": "playerone-daemon-integration",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "PlayerOne vision daemon must be installed and started on the queue host and registered as the critique executor. Human/agent infra work."
+  },
+  {
+    "id": "freestyle-3d-template",
+    "title": "freestyle-3d-template",
+    "kind": "gateway",
+    "params": {
+      "op": "new_game",
+      "name": "Freestyle 3D Study",
+      "template": "3d-study",
+      "pitch": "Freestyle 3D template exercise to validate the 3d-study lane",
+      "requester": "ralph"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Exercises the 3d-study template lane."
+  },
+  {
+    "id": "testlab-first-real-run",
+    "title": "testlab-first-real-run",
+    "kind": "gateway",
+    "params": {
+      "op": "device_test",
+      "game": "octogram-arcade"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "First real Firebase Test Lab robo run on physical devices."
+  }
+]

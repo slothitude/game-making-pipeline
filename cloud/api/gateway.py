@@ -210,6 +210,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True, "queue": False, "detail": str(exc)})
             return
 
+        if parsed.path == "/api/public/status":  # no token — site dashboard feed
+            try:
+                _, health = queue_call("GET", "/health")
+                counts, queue_up = health.get("counts"), True
+            except QueueDown:
+                counts, queue_up = None, False
+            roster = [{"slug": g["slug"], "name": g.get("name", g["slug"]),
+                       "live": g.get("live") or {}}
+                      for g in self.games.values()]
+            ladder = load_ladder()
+            say(f"GET /api/public/status -> {len(roster)} games (public feed)")
+            self._json(200, {"ok": True, "version": VERSION,
+                             "queue": {"reachable": queue_up, "counts": counts},
+                             "games": roster, "ladder": ladder})
+            return
+
         if not self._authed():
             say(f"GET {parsed.path} -> 403 (bad token from {self.client_address[0]})")
             self._json(403, {"error": "bad X-Token"})
@@ -342,6 +358,21 @@ class GatewayHandler(BaseHTTPRequestHandler):
         if body is None:
             say(f"POST {parsed.path} -> 400 (body is not a JSON object)")
             self._json(400, {"error": "body must be a JSON object"})
+            return
+
+        if parsed.path == "/api/jobs/claim":  # remote workers (Lappy) claim lane
+            _, code, payload = queue_call("POST", "/jobs/claim", body)
+            job = (payload or {}).get("job") or {}
+            say(f"POST /api/jobs/claim types={body.get('types')} -> "
+                f"job {job.get('id', 'none')}")
+            self._json(code if code else 200, payload)
+            return
+
+        if parsed.path.startswith("/api/jobs/") and parsed.path.endswith("/result"):
+            jid = parsed.path.split("/")[3]
+            _, code, payload = queue_call("POST", f"/jobs/{jid}/result", body)
+            say(f"POST /api/jobs/{jid}/result -> {str(body)[:80]}")
+            self._json(code if code else 200, payload)
             return
 
         if parsed.path == "/api/games":

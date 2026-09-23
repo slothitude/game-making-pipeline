@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- Local stand-in for a live retromonkey HTML5 game: full-viewport canvas,
+     an animation loop (bouncing ball + drifting scan bar + frame counter),
+     and one deliberate console error ~1.2s in so a collect_evidence run can
+     prove its console-error capture lane. Serve with:
+       python -m http.server 8931   (from this tests/ directory)
+     then:
+       collect_evidence.py --game fixture --url http://127.0.0.1:8931/fixture_game.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fixture game</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #101418; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+function fit() { canvas.width = innerWidth; canvas.height = innerHeight; }
+fit();
+addEventListener("resize", fit);
+
+const ball = { x: 80, y: 120, vx: 130, vy: 97, r: 16 };
+let frames = 0;
+let start = performance.now();
+
+setTimeout(() => {
+  console.error("fixture: intentional console error — event-capture proof");
+}, 1200);
+
+function tick(now) {
+  const dt = Math.min(0.05, (now - start) / 1000);
+  start = now;
+  frames++;
+
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+  if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.vx *= -1;
+  if (ball.y < ball.r || ball.y > canvas.height - ball.r) ball.vy *= -1;
+  ball.x = Math.max(ball.r, Math.min(canvas.width - ball.r, ball.x));
+  ball.y = Math.max(ball.r, Math.min(canvas.height - ball.r, ball.y));
+
+  ctx.fillStyle = "#101418";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const scanY = (now / 12) % canvas.height;
+  ctx.fillStyle = "#1c2530";
+  ctx.fillRect(0, scanY, canvas.width, 3);
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd166";
+  ctx.fill();
+  ctx.fillStyle = "#8fd694";
+  ctx.font = "16px monospace";
+  ctx.fillText("fixture " + frames, 10, 22);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

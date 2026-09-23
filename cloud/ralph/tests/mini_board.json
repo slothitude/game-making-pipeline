@@ -1,0 +1,38 @@
+[
+  {
+    "id": "mini-gateway-task",
+    "title": "mini-gateway-task",
+    "kind": "gateway",
+    "params": {
+      "op": "new_game",
+      "name": "Stub Burn",
+      "template": "arcade",
+      "requester": "ralph-test"
+    },
+    "status": "todo",
+    "job_id": null,
+    "notes": "Dispatchable through the stub gateway."
+  },
+  {
+    "id": "mini-manual-task",
+    "title": "mini-manual-task",
+    "kind": "manual",
+    "params": {},
+    "status": "todo",
+    "job_id": null,
+    "notes": "Human must flip the test switch on the physical bench before this can proceed."
+  },
+  {
+    "id": "mini-stale-job",
+    "title": "mini-stale-job",
+    "kind": "gateway",
+    "params": {
+      "op": "deploy",
+      "game": "sonar",
+      "target": "retromonkey"
+    },
+    "status": "queued",
+    "job_id": 9999,
+    "notes": "Job 9999 does not exist on the stub - stale job_id, must be detected in inventory."
+  }
+]

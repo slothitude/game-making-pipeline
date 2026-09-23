@@ -828,8 +828,9 @@
   })();
 
   /* ============================================================
-     SECTION 2 — THE FULL WORKFLOW: status pills fed from
-     pipeline-queue.json / pipeline-schedule.json (graceful "—")
+     SECTION 2 — THE FULL WORKFLOW: status pills fed LIVE from
+     GET /api/public/status, with pipeline-queue.json /
+     pipeline-schedule.json as the graceful fallback
      ============================================================ */
   (function () {
     var P = {};
@@ -845,10 +846,11 @@
     }
     resetPills();
 
-    var queueData = null, schedData = null;
+    var liveData = null, queueData = null, schedData = null;
     function render() {
       var q = queueData && queueData.queue ? queueData.queue : null;
       var s = schedData && schedData.recurring ? schedData.recurring : null;
+      var liveQ = (liveData && liveData.queue && liveData.queue.counts) ? liveData.queue.counts : null;
 
       /* INPUTS — the cron fronts on file */
       if (s) {
@@ -867,8 +869,10 @@
         }
       }
 
-      /* QUEUE — how many jobs on file */
-      if (q) pill("queue", q.length ? "warn" : "ok", q.length + " ON FILE · ONE AT A TIME");
+      /* QUEUE — the live count from the API front door when it answers, else the static file */
+      if (liveQ) pill("queue", liveQ.queued ? "warn" : "ok",
+        liveQ.queued + " ON FILE · ONE AT A TIME" + (liveData.queue.reachable === false ? " · QUEUE DOWN" : " · LIVE API"));
+      else if (q) pill("queue", q.length ? "warn" : "ok", q.length + " ON FILE · ONE AT A TIME");
 
       /* BUILDER — the head of the queue is what builds next */
       if (q) {
@@ -877,6 +881,8 @@
         pill("builder", head ? (head.status === "running" ? "ok" : "warn") : "ok",
           head ? "NEXT: " + String(head.action || "?") + (head.game ? " → " + head.game : "") : "IDLE — CAUGHT UP");
       }
+      else if (liveQ) pill("builder", liveQ.queued ? "warn" : "ok",
+        liveQ.queued ? liveQ.queued + " QUEUED SERVER-SIDE · ONE AT A TIME" : "IDLE — CAUGHT UP");
 
       /* GATES — red on the board means auto-revert is armed */
       if (q) {
@@ -884,6 +890,7 @@
         var green = q.filter(function (j) { return j.status === "completed"; }).length;
         pill("gates", red ? "down" : "ok", red ? red + " RED ON THE BOARD · AUTO-REVERT ARMED" : green + " GREEN ON FILE · 2× OR NO SHIP");
       }
+      else if (liveQ) pill("gates", "ok", (liveQ.done || 0) + " GREEN ON FILE · 2× OR NO SHIP");
 
       /* DEPLOY — last completed deploy on file */
       if (q) {
@@ -920,6 +927,13 @@
     function poll() {
       pollOne("pipeline-queue.json", function (d) { queueData = d || {}; });
       pollOne("pipeline-schedule.json", function (d) { schedData = d || {}; });
+      /* the live front door — the static JSONs above are the fallback when this misses */
+      if (window.fetch) {
+        window.fetch("/api/public/status?t=" + Date.now(), { cache: "no-store" })
+          .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+          .then(function (d) { liveData = (d && d.ok) ? d : null; render(); })
+          .catch(function () { liveData = null; /* API unreachable — pills fall back to the static files */ });
+      }
     }
     poll();
     setInterval(poll, 30000);

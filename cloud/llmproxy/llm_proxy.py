@@ -93,6 +93,69 @@ def _call(url: str, payload: dict, key: str, extra: dict | None, timeout: int) -
     return txt
 
 
+def _playerone_context(req: dict) -> list:
+    """The investigator's briefcase: real state, fetched server-side, injected
+    as the opening system message when a chat carries playerone_game."""
+    game = str(req.get("playerone_game") or "").strip()
+    if not game:
+        return []
+    mode = str(req.get("playerone_mode") or "critic").strip()
+    facts = []
+    ev = f"/home/ubuntu/playerone/evidence/{game}/latest.json"
+    try:
+        with open(ev, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        facts.append(f"last evidence run: {d.get('seconds')}s, {d.get('shots')} "
+                     f"screenshots, events: "
+                     f"{json.dumps(d.get('events', [])[:3])[:300]}")
+    except (OSError, ValueError):
+        facts.append("no playthrough evidence on file yet")
+    rev = f"/home/ubuntu/pipeline/reviews/{game}.jsonl"
+    try:
+        with open(rev, "r", encoding="utf-8") as f:
+            rows = [json.loads(ln) for ln in f if ln.strip()][-3:]
+        facts.append("recent player reviews: " + json.dumps(rows)[:600])
+    except (OSError, ValueError):
+        facts.append("no player reviews yet")
+    if mode == "helper":
+        spec_facts = []
+        for rel in ("spec/study_spec.json", "spec/jam_spec.json"):
+            sp = f"/home/ubuntu/games-src/{game}/{rel}"
+            try:
+                with open(sp, "r", encoding="utf-8") as f:
+                    spec = json.load(f)
+                systems = spec.get("systems_law") or spec.get("systems") or []
+                if isinstance(systems, list):
+                    spec_facts = [str(s)[:220] for s in systems[:8]]
+                break
+            except (OSError, ValueError):
+                continue
+        system = (
+            "You are PlayerOne, a friendly in-game COACH for the game "
+            f"'{game}'. You have read the game's design spec — its systems: "
+            + (" | ".join(spec_facts) if spec_facts else "general knowledge")
+            + ". You also know: " + " | ".join(facts) + ". "
+            "HELP THEM PLAY: answer questions about mechanics and controls, "
+            "give ONE hint at a time (never spoilers or full solutions unless "
+            "they explicitly ask), celebrate their progress, keep it to 2-3 "
+            "short sentences with warmth. If they're stuck on something that "
+            "sounds like a design flaw, say you'll note it for the crew and "
+            "output a ```plan block like the critic would."
+        )
+        return [{"role": "system", "content": system}]
+    system = (
+        "You are PlayerOne, the Pipeline's critic, chatting with a player "
+        f"inside the game '{game}'. You have INVESTIGATED before speaking. "
+        "Facts you found: " + " | ".join(facts) + ". "
+        "Be brief (2-3 sentences), curious, honest. When the conversation "
+        "reveals something fixable, MAKE A PLAN: output a fenced block "
+        "```plan\\n[{\"type\": \"tune_tunable|generate_art|milestone|critique\", "
+        "\"payload\": {...}, \"priority\": 4}]\\n``` with 1-3 concrete jobs, then "
+        "one line asking if they want it filed for the crew."
+    )
+    return [{"role": "system", "content": system}]
+
+
 def _gemini(messages: list, key: str, max_tokens: int) -> str:
     system, contents = "", []
     for msg in messages:
@@ -155,7 +218,7 @@ class LLMProxy(BaseHTTPRequestHandler):
             req = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
             return self._json(400, {"error": "bad json"})
-        messages = req.get("messages")
+        messages = _playerone_context(req) + list(req.get("messages") or [])
         if not isinstance(messages, list) or not messages:
             return self._json(400, {"error": "messages required"})
         max_tokens = min(int(req.get("max_tokens") or 900), MAX_TOKENS)

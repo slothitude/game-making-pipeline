@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fixture_any</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #101018; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="800"></canvas>
+<script>
+// The stand-in for ANY game: one canvas, one box, one counter. Every zone
+// action does something different — taps teleport the box to the tapped
+// third, swipes nudge it 60 px that way and shift its hue, wait does nothing.
+// A slow orb keeps the frame alive so pixels mode always has motion.
+const cv = document.getElementById('game');
+const cx = cv.getContext('2d');
+const box = { x: 240, y: 400, hue: 190, taps: 0, swipes: 0, note: 'booted' };
+const orb = { x: 240, y: 120, dy: 3 };
+let down = null;
+
+function zone(x, y) {
+  return (x < 160 ? 'left' : x > 320 ? 'right' : 'center') + '-' +
+         (y < 266 ? 'top' : y > 533 ? 'bottom' : 'mid');
+}
+
+cv.addEventListener('pointerdown', (e) => {
+  const r = cv.getBoundingClientRect();
+  down = { x: e.clientX - r.left, y: e.clientY - r.top };
+});
+
+cv.addEventListener('pointerup', (e) => {
+  if (!down) return;
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  const dx = x - down.x;
+  const dy = y - down.y;
+  if (Math.hypot(dx, dy) > 40) {
+    box.swipes += 1;
+    box.hue = (box.hue + 45) % 360;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      box.x += Math.sign(dx) * 60;
+      box.note = 'swipe ' + (dx > 0 ? 'right' : 'left');
+    } else {
+      box.y += Math.sign(dy) * 60;
+      box.note = 'swipe ' + (dy > 0 ? 'down' : 'up');
+    }
+  } else {
+    box.taps += 1;
+    box.x = x;
+    box.y = y;
+    box.note = 'tap ' + zone(x, y);
+  }
+  box.x = Math.max(30, Math.min(450, box.x));
+  box.y = Math.max(30, Math.min(770, box.y));
+  down = null;
+});
+
+function frame() {
+  orb.y += orb.dy;
+  if (orb.y > 760 || orb.y < 40) orb.dy *= -1;
+  cx.fillStyle = '#181c30';
+  cx.fillRect(0, 0, 480, 800);
+  cx.fillStyle = '#283052';
+  cx.fillRect(0, 0, 480, 266);
+  cx.fillStyle = '#404878';
+  cx.fillRect(0, 0, 480, 133);
+  cx.beginPath();
+  cx.arc(orb.x, orb.y, 14, 0, 7);
+  cx.fillStyle = '#7a5cff';
+  cx.fill();
+  cx.fillStyle = 'hsl(' + box.hue + ', 80%, 62%)';
+  cx.fillRect(box.x - 25, box.y - 25, 50, 50);
+  cx.fillStyle = '#e8e8f0';
+  cx.font = '24px monospace';
+  cx.fillText('score ' + (box.taps + box.swipes), 16, 40);
+  cx.font = '13px monospace';
+  cx.fillStyle = '#9aa2c0';
+  cx.fillText(box.note + ' @ ' + Math.round(box.x) + ',' + Math.round(box.y), 16, 62);
+  requestAnimationFrame(frame);
+}
+frame();
+
+window.fixtureProbe = () => ({
+  state: 'playing',
+  score: box.taps + box.swipes,
+  taps: box.taps,
+  swipes: box.swipes,
+  box: [Math.round(box.x), Math.round(box.y)],
+  note: box.note,
+});
+</script>
+</body>
+</html>

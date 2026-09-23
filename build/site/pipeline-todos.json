@@ -1,25 +1,172 @@
 {
   "todos": [
-    {"id": 1, "priority": 1, "task": "Replace the Cubefall placeholder art — real key art render is still 'RENDERING' on the live card", "game": "cubefall", "status": "pending"},
-    {"id": 2, "priority": 1, "task": "Gyro Squadron tilt calibration pass — steering overshoots on phone", "game": "gyro-squadron-45", "status": "in-progress"},
-    {"id": 3, "priority": 1, "task": "Green-light Star Visitor build 18 — stuck at 214/240 tests since build 17", "game": "star-visitor", "status": "pending"},
-    {"id": 4, "priority": 1, "task": "Restore the Daily Remake job — the 2026-09-22 10:23 run failed and nothing remade", "game": null, "status": "pending"},
-    {"id": 5, "priority": 2, "task": "Cubefall test coverage 96/140 → 140/140, green twice or it doesn't ship", "game": "cubefall", "status": "in-progress"},
-    {"id": 6, "priority": 2, "task": "Octogram Arcade: ship the tile-bank zoom (PlayerOne work-order #1)", "game": "octogram-arcade", "status": "pending"},
-    {"id": 7, "priority": 2, "task": "Octogram Arcade: move mute out of the pause menu — phone UX still 4/10", "game": "octogram-arcade", "status": "pending"},
-    {"id": 8, "priority": 2, "task": "Star Visitor: burrow mechanic level 3 — tunnels under the enemy field", "game": "star-visitor", "status": "pending"},
-    {"id": 9, "priority": 2, "task": "SONAR v1.2: sonar ping cooldown tuning — spam-ping beats listening", "game": "sonar", "status": "completed"},
-    {"id": 10, "priority": 2, "task": "Slime Line: letter-bug font fallback for small screens", "game": "slime-line", "status": "completed"},
-    {"id": 11, "priority": 2, "task": "Gyro Squadron: weather cheat fairness pass — crosswind lies about drift", "game": "gyro-squadron-45", "status": "pending"},
-    {"id": 12, "priority": 3, "task": "Deploy agent_loop.py with queue drain — the Action Queue becomes real", "game": null, "status": "pending"},
-    {"id": 13, "priority": 3, "task": "Wire the Telegram bot to /build and /dispatch so chat commands land in the queue", "game": null, "status": "in-progress"},
-    {"id": 14, "priority": 3, "task": "Multiplayer signal server: production startup + auto-restart", "game": null, "status": "in-progress"},
-    {"id": 15, "priority": 3, "task": "itch feedback scraper: turn reviews into critique work-orders automatically", "game": null, "status": "pending"},
-    {"id": 16, "priority": 3, "task": "Daily remake backlog: spec the next 7 (SkiFree → Rodent's Revenge)", "game": null, "status": "pending"},
-    {"id": 17, "priority": 3, "task": "PlayerOne retrain job: replay last 50 sessions, rebuild the play policy", "game": null, "status": "completed"},
-    {"id": 18, "priority": 4, "task": "Octogram combo timer grace window (+0.5s) — ADHD-friendliness 6/10", "game": "octogram-arcade", "status": "pending"},
-    {"id": 19, "priority": 4, "task": "Site: per-game critique score badges on the game cards", "game": null, "status": "completed"},
-    {"id": 20, "priority": 4, "task": "SCULMM engine: world-gen manifest schema v2 (rooms, textures, lighting)", "game": null, "status": "pending"},
-    {"id": 21, "priority": 4, "task": "Diary RSS feed for the daily remakes", "game": null, "status": "pending"}
+    {
+      "id": 1,
+      "priority": 3,
+      "task": "Art + tunables fronts - every game's art pass and tunables face is live",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 2,
+      "priority": 3,
+      "task": "Vision tier - the pipeline can see screenshots, not just test output",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 3,
+      "priority": 3,
+      "task": "itch.io cover art for every shipped game",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 4,
+      "priority": 3,
+      "task": "APK exports + CI - Android builds ride GitHub Actions",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 5,
+      "priority": 3,
+      "task": "Gemini rung added to the brain ladder (catch, not boss)",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 6,
+      "priority": 3,
+      "task": "Multiplayer skeleton - signal server, guest login, one global chat room",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 7,
+      "priority": 1,
+      "task": "Queue + gateway + MCP spine live - Postgres queue, API front door, agents can connect",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 8,
+      "priority": 4,
+      "task": "Site fronts - index, make and assets refreshed end to end",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 9,
+      "priority": 3,
+      "task": "Human-training pass - PlayerOne retrained on human sessions: 2.5x on human play vs scripted",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 10,
+      "priority": 2,
+      "task": "SONAR air lane shipped",
+      "game": "sonar",
+      "status": "completed"
+    },
+    {
+      "id": 11,
+      "priority": 2,
+      "task": "STAR VISITOR slice C green - mini-boss robot + wave-2 heavies, 58+58 twice",
+      "game": "star-visitor",
+      "status": "completed"
+    },
+    {
+      "id": 12,
+      "priority": 2,
+      "task": "GYRO SQUADRON '45 to itch - M3 black budget in, page live",
+      "game": "gyro-squadron-45",
+      "status": "completed"
+    },
+    {
+      "id": 13,
+      "priority": 3,
+      "task": "LLM proxy systemd unit - the brain ladder survives reboots",
+      "game": null,
+      "status": "completed"
+    },
+    {
+      "id": 14,
+      "priority": 1,
+      "task": "Ralph loop - the agent that drives the agent, wired into the live queue",
+      "game": null,
+      "status": "in-progress"
+    },
+    {
+      "id": 15,
+      "priority": 2,
+      "task": "CUBEFALL M3 - building now (M2 is green)",
+      "game": "cubefall",
+      "status": "in-progress"
+    },
+    {
+      "id": 16,
+      "priority": 2,
+      "task": "POWDER RUN M1 - daily remake #1, the SkiFree study, breaks ground",
+      "game": "powder-run",
+      "status": "in-progress"
+    },
+    {
+      "id": 17,
+      "priority": 1,
+      "task": "Executor wiring - queue rows become running jobs, one at a time, no exceptions",
+      "game": null,
+      "status": "in-progress"
+    },
+    {
+      "id": 18,
+      "priority": 1,
+      "task": "First end-to-end burn - spec to build to test to ship with zero human hands",
+      "game": null,
+      "status": "in-progress"
+    },
+    {
+      "id": 19,
+      "priority": 3,
+      "task": "Telegram wiring - /build and /dispatch land chat commands in the Postgres queue",
+      "game": null,
+      "status": "pending"
+    },
+    {
+      "id": 20,
+      "priority": 3,
+      "task": "Test Lab first real run - the Google offload takes a real build",
+      "game": null,
+      "status": "pending"
+    },
+    {
+      "id": 21,
+      "priority": 4,
+      "task": "Asset packs - per-game downloadable asset bundles",
+      "game": null,
+      "status": "pending"
+    },
+    {
+      "id": 22,
+      "priority": 4,
+      "task": "Forgejo mirror - repos land on Lappy's Forgejo too",
+      "game": null,
+      "status": "pending"
+    },
+    {
+      "id": 23,
+      "priority": 4,
+      "task": "Checkers game - the oldest remake in the backlog",
+      "game": null,
+      "status": "pending"
+    },
+    {
+      "id": 24,
+      "priority": 4,
+      "task": "Freestyle template - the make-a-game front gets a no-spec mode",
+      "game": null,
+      "status": "pending"
+    }
   ]
 }

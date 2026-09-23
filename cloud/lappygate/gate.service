@@ -1,0 +1,8 @@
+#!/bin/bash
+# lappy-gate launcher — gate verifier + nginx proxy, Telegram-only access.
+set -e
+export GATE_SECRET="$(cat /home/aaron/lappygate/secret)"
+export TG_BOT_TOKEN="$(cat /home/aaron/lappygate/tgtoken)"
+export TG_BOT_USERNAME="Slothitude_bot"
+nohup python3 /home/aaron/lappygate/gate.py >/tmp/lappygate.log 2>&1 &
+echo "gate verifier up (9010)"

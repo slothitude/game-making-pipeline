@@ -1,0 +1,83 @@
+{
+	admin off
+	auto_https off
+}
+
+# lappy-gate — ONE tailscale endpoint, path-routed, Telegram-verified.
+# https://lappy-ubuntu.tail7c489f.ts.net/
+#   /              -> EmulatorJS  (front 8200 + backend 8201 routes)
+#   /chat/*        -> OpenWebUI   (3080)
+#   /portainer/*   -> Portainer   (9443 tls)
+#   /media/*       -> Jellyfin    (8097)
+
+(backend_auth) {
+	@widget path /__login /__auth /__verify /__whoami
+	handle @widget {
+		reverse_proxy 127.0.0.1:9010
+	}
+	handle {
+		forward_auth 127.0.0.1:9010 {
+			uri /__verify
+		}
+	}
+}
+
+:9200 {
+	import backend_auth
+
+	# EmulatorJS backend: socket.io + API must reach port 3001 (mapped 8201)
+	handle /socket.io/* {
+		reverse_proxy 127.0.0.1:8201
+	}
+	handle /emuback/* {
+		uri strip_prefix /emuback
+		reverse_proxy 127.0.0.1:8201
+	}
+	handle /data/* {
+		reverse_proxy 127.0.0.1:8201
+	}
+
+	handle /chat/* {
+		uri strip_prefix /chat
+		reverse_proxy 127.0.0.1:3080
+	}
+
+	handle /portainer/* {
+		uri strip_prefix /portainer
+		reverse_proxy https://127.0.0.1:9443 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	handle /media/* {
+		uri strip_prefix /media
+		reverse_proxy 127.0.0.1:8097
+	}
+
+	handle /comfy/* {
+		uri strip_prefix /comfy
+		reverse_proxy 127.0.0.1:8181
+	}
+
+	handle /search/* {
+		uri strip_prefix /search
+		reverse_proxy 127.0.0.1:8896
+	}
+
+	handle /forgejo/* {
+		uri strip_prefix /forgejo
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle /reader/* {
+		uri strip_prefix /reader
+		reverse_proxy 127.0.0.1:8898
+	}
+
+	# everything else -> the arcade front end
+	handle {
+		reverse_proxy 127.0.0.1:8200
+	}
+}

@@ -1,0 +1,24 @@
+{
+  "game": "fixture",
+  "url": "http://127.0.0.1:8931/fixture_game.html",
+  "started": "2026-09-23T04:15:09+00:00",
+  "seconds": 6.0,
+  "shots": 4,
+  "survival_seconds": 6.0,
+  "actions_taken": 4,
+  "note": "playwright evidence feed",
+  "events": [
+    {
+      "t": 0.65,
+      "note": "load complete in 0.65s"
+    },
+    {
+      "t": 1.84,
+      "note": "console error: fixture: intentional console error \u2014 event-capture proof"
+    },
+    {
+      "t": 2.66,
+      "note": "settled 2.0s for boot"
+    }
+  ]
+}
