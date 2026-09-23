@@ -39,14 +39,16 @@ jobs:
       # Push triggers have no inputs — default to the flagship repo.
       GAME_SLUG: ${{ inputs.game || 'octogram-arcade' }}
     steps:
-      # The godot image is minimal: no git, no unzip, no JDK. git for checkout,
-      # unzip for the template tpz, JDK because APK signing runs keytool/
-      # jarsigner (OpenJDK 17 per the Godot Android export docs). Gradle is NOT
-      # needed — these presets use classic APK export (use_gradle_build=false).
-      - name: Install git + unzip + fontconfig + JDK (godot image is minimal)
+      # The godot image is minimal: no git, no unzip, no curl, no JDK. git for
+      # checkout, unzip for the template tpz, curl for the template fallback
+      # download (the image ships wget but the tpz step predates that — keep it
+      # explicit), JDK because APK signing runs keytool/jarsigner (OpenJDK 17 per
+      # the Godot Android export docs). Gradle is NOT needed — these presets use
+      # classic APK export (use_gradle_build=false).
+      - name: Install git + unzip + curl + fontconfig + JDK (godot image is minimal)
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git unzip ca-certificates fontconfig openjdk-17-jdk-headless
+          apt-get install -y --no-install-recommends git unzip curl ca-certificates fontconfig openjdk-17-jdk-headless
 
       # The GMP repo itself: full checkout (no paths worth pruning — this repo
       # is small by law).
@@ -61,33 +63,79 @@ jobs:
           path: game
           submodules: false
 
-      # Same bootstrap as games-ci: this image ships the editor only, and the
-      # Android templates ride in the same tpz as the Web ones. The image is
-      # pinned to 4.7.1, so this resolves 4.7.1.stable every time.
+      # The image DOES bake export templates — but under /root, which Godot can't
+      # see: Actions container jobs set HOME=/github/home, and Godot resolves
+      # ~/.local/share/godot against that. So copy the baked 4.7.1-stable
+      # templates into the real HOME (fast path); download the tpz only if the
+      # image ever stops shipping them. Pinned image = 4.7.1.stable every time.
       - name: Bootstrap export templates (4.7.1-stable)
         run: |
           set -e
           V="$(godot --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)"
           TPL_DIR="${HOME}/.local/share/godot/export_templates/${V}.stable"
-          if [ ! -d "${TPL_DIR}" ]; then
+          BAKED_DIR="/root/.local/share/godot/export_templates/${V}.stable"
+          if [ -d "${TPL_DIR}" ]; then
+            echo "Templates for ${V} already present."
+          elif [ -d "${BAKED_DIR}" ]; then
+            echo "Copying export templates baked into the image: ${BAKED_DIR}"
+            mkdir -p "$(dirname "${TPL_DIR}")"
+            cp -r "${BAKED_DIR}" "${TPL_DIR}"
+          else
             echo "Downloading export templates for Godot ${V}..."
             curl -fsSL -o /tmp/templates.tpz \
               "https://github.com/godotengine/godot/releases/download/${V}-stable/Godot_v${V}-stable_export_templates.tpz"
             unzip -q -o /tmp/templates.tpz -d /tmp/templates
             mkdir -p "${TPL_DIR}"
             mv /tmp/templates/templates/* "${TPL_DIR}/"
-          else
-            echo "Templates for ${V} already present."
           fi
+
+      # Headless export does NOT auto-mint the debug keystore (that only happens
+      # on editor-settings-changed in the UI) and Godot takes the Android/JDK
+      # paths from editor settings, not env vars. So write the editor_settings
+      # file the image intended for /root into the real HOME: point at the apt
+      # JDK, the image's Android SDK, and a debug keystore — the image's baked
+      # /root/debug.keystore when present, else one minted here with keytool.
+      - name: Configure Godot for Android export (JDK + SDK + debug keystore)
+        run: |
+          set -e
+          V="$(godot --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)"
+          JAVA_SDK="/usr/lib/jvm/java-17-openjdk-amd64"
+          ANDROID_SDK="/usr/lib/android-sdk"
+          if [ -f /root/debug.keystore ]; then
+            KEYSTORE="/root/debug.keystore"
+            echo "Using debug keystore baked into the image."
+          else
+            KEYSTORE="${HOME}/.android/debug.keystore"
+            mkdir -p "$(dirname "${KEYSTORE}")"
+            keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android \
+              -keystore "${KEYSTORE}" -storepass android \
+              -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          fi
+          mkdir -p "${HOME}/.config/godot"
+          cat > "${HOME}/.config/godot/editor_settings-${V%.*}.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "${JAVA_SDK}"
+          export/android/android_sdk_path = "${ANDROID_SDK}"
+          export/android/debug_keystore = "${KEYSTORE}"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
 
       # Import once so .godot/imported exists before the export.
       - name: Import project
         run: godot --headless --path game --import
 
-      # Classic APK export (no gradle) against the game's "Android" preset.
-      # Godot mints ~/.android/debug.keystore with keytool on first use, so the
-      # result is debug-signed — exactly what Test Lab wants for phase G1.
+      # Classic APK export (no gradle) against the game's "Android" preset. The
+      # preset carries no custom keystore, so signing uses the debug keystore
+      # wired up above — debug-signed, exactly what Test Lab wants for G1.
+      # Env vars are redundant with the editor settings but keep Godot's
+      # defaults correct even if that file were ignored.
       - name: Export Android APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          ANDROID_HOME: /usr/lib/android-sdk
         run: |
           cd game
           godot --headless --export-release "Android" "builds/${GAME_SLUG}.apk"
