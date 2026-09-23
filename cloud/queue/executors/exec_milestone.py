@@ -52,7 +52,7 @@ PI_TIMEOUT = 1800        # milestone-depth build; the brain gets room
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
-FORGEJO_TOKEN = "d4debb443b2ccc21"  # basic-auth token; FORGEJO_TOKEN env overrides
+FORGEJO_TOKEN = "${FORGEJO_TOKEN}"  # basic-auth token; FORGEJO_TOKEN env overrides
 PUSH_BRANCH = "main"     # the branch the Actions gate wall watches
 
 PROMPT_LAWS = """LAWS (never break):
@@ -486,7 +486,7 @@ def _selftest():
          "commit", "-m", "milestone M2 (fake-game) via exec_milestone"],
         ["git", "rev-parse", "--short", "HEAD"],
         ["git", "push",
-         "https://slothitude:d4debb443b2ccc21@127.0.0.1:3001/slothitude/fake-game.git",
+         "https://slothitude:${FORGEJO_TOKEN}@127.0.0.1:3001/slothitude/fake-game.git",
          "HEAD:main"],
     ]
     assert git_cmds == expected, git_cmds

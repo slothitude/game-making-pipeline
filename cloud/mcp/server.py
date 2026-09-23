@@ -268,7 +268,7 @@ GAMES_SRC = os.environ.get("GMP_GAMES_SRC", "/home/ubuntu/games-src")
 FORGEJO_BASE = os.environ.get("FORGEJO_HOST", "127.0.0.1:3001")
 FORGEJO_ORG = "slothitude"
 FORGEJO_TOKEN = os.environ.get("FORGEJO_TOKEN",
-                               "d4debb443b2ccc21")  # basic-auth token
+                               "${FORGEJO_TOKEN}")  # basic-auth token
 
 
 def _game_path(game: str) -> Path:

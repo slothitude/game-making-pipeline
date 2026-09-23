@@ -1,3 +1,5 @@
 cloud/.env
 cloud/mcp/.token
 daily/__pycache__/
+__pycache__/
+cloud/.env
