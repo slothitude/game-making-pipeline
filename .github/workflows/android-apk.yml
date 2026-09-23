@@ -63,6 +63,66 @@ jobs:
           path: game
           submodules: false
 
+      # Not every game repo ships an Android preset yet (sonar exported Web-only
+      # on the first cloud run), and Android export hard-fails without ETC2/ASTC
+      # texture import enabled (godot 4.7 checks should_import_etc2_astc() in
+      # cmdline mode). Both are patched into the WORKSPACE COPY here — the game
+      # repos stay untouched. Idempotent: no-ops when a preset already exists /
+      # the setting is already on. Runs before --import so textures bake ETC2.
+      - name: Prepare Android export config in workspace copy
+        run: |
+          set -e
+          CFG="game/export_presets.cfg"
+          if [ -f "${CFG}" ] && grep -q '^name="Android"' "${CFG}"; then
+            echo "Android preset already present in export_presets.cfg."
+          else
+            if [ -f "${CFG}" ]; then
+              SEC="preset.$(grep -cE '^\[preset(\.[0-9]+)?\]$' "${CFG}" || true)"
+            else
+              SEC="preset"
+              : > "${CFG}"
+            fi
+          cat >> "${CFG}" <<EOF
+
+          [${SEC}]
+
+          name="Android"
+          platform="Android"
+          runnable=true
+          export_filter="all_resources"
+          export_path="builds/${GAME_SLUG}.apk"
+          [${SEC}.options]
+
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          version/code=1
+          package/unique_name="com.slothitude.${GAME_SLUG}"
+          package/name="${GAME_SLUG}"
+          package/signed=true
+          screen/immersive_mode=true
+          EOF
+            echo "Injected Android preset (${SEC}) into workspace export_presets.cfg."
+          fi
+          PG="game/project.godot"
+          KEY="textures/vram_compression/import_etc2_astc"
+          if grep -q "^${KEY}=true" "${PG}"; then
+            echo "ETC2/ASTC texture import already enabled."
+          elif grep -q "^${KEY}=" "${PG}"; then
+            sed -i "s|^${KEY}=.*|${KEY}=true|" "${PG}"
+            echo "Flipped ${KEY} to true."
+          elif grep -q '^\[rendering\]' "${PG}"; then
+            sed -i "/^\[rendering\]/a ${KEY}=true" "${PG}"
+            echo "Added ${KEY}=true under [rendering]."
+          else
+            printf '\n[rendering]\n%s=true\n' "${KEY}" >> "${PG}"
+            echo "Appended [rendering] with ${KEY}=true."
+          fi
+
       # The image DOES bake export templates — but under /root, which Godot can't
       # see: Actions container jobs set HOME=/github/home, and Godot resolves
       # ~/.local/share/godot against that. So copy the baked 4.7.1-stable
@@ -127,18 +187,19 @@ jobs:
       - name: Import project
         run: godot --headless --path game --import
 
-      # Classic APK export (no gradle) against the game's "Android" preset. The
-      # preset carries no custom keystore, so signing uses the debug keystore
-      # wired up above — debug-signed, exactly what Test Lab wants for G1.
-      # Env vars are redundant with the editor settings but keep Godot's
-      # defaults correct even if that file were ignored.
+      # Classic APK export (no gradle) against the game's "Android" preset.
+      # --export-debug (not --export-release): the release signing branch reads
+      # ONLY keystore/release and hard-fails without one, while the debug branch
+      # uses the debug keystore wired up above — debug-signed, exactly what Test
+      # Lab wants for G1. Env vars are redundant with the editor settings but
+      # keep Godot's defaults correct even if that file were ignored.
       - name: Export Android APK
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_HOME: /usr/lib/android-sdk
         run: |
           cd game
-          godot --headless --export-release "Android" "builds/${GAME_SLUG}.apk"
+          godot --headless --export-debug "Android" "builds/${GAME_SLUG}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
