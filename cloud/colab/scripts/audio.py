@@ -43,10 +43,12 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import subprocess
 import sys
+import tarfile
 import time
 import wave
 import zipfile
@@ -144,8 +146,125 @@ def _sh(cmd, **kw):
     return subprocess.run(cmd, check=True, **kw)
 
 
-def _pip(*args):
+# ---------------------------------------------------------------------------
+# cold-start cache (retromonkey capability URL — unguessable path only; the
+# contents are public PyPI wheels / public model weights). One HTTPS pull per
+# tar per session replaces the per-session PyPI + HF hub re-download tax.
+# EVERY step here is non-fatal: a miss or a stale tar degrades to exactly the
+# pre-cache download path. Build + refresh procedure: cloud/colab/CACHE.md.
+# ---------------------------------------------------------------------------
+CC_BASE = "https://retromonkey.com.au/cc/fbf37bb3bf14379a/"
+CC_ROOT = Path("/content/gmp_cc")
+CC_WHEELS = CC_ROOT / "wheels"      # wheels.tar  -> pip --no-index --find-links
+CC_WEIGHTS = CC_ROOT / "weights"    # weights.tar -> hub/models--* (HF_HOME target)
+_CC_WHEEL_NAMES = None              # lazy listing cache
+
+
+def _pip_raw(*args):
     _sh([sys.executable, "-m", "pip", "install", "-q", *args])
+
+
+def _req_lines(args) -> list:
+    """['-r', file, 'pkg', ...] -> individual requirement strings, so the
+    per-line fallback can isolate one bad line (sdist-only, torch, stale pin)
+    without losing the cached rest. -r files exist by the time _pip runs."""
+    reqs, i = [], 0
+    while i < len(args):
+        a = str(args[i])
+        i += 1
+        if a in ("-r", "--requirement"):
+            p = Path(str(args[i])) if i < len(args) else None
+            i += 1
+            if p is not None and p.is_file():
+                reqs += [ln.strip() for ln in
+                         p.read_text(encoding="utf-8").splitlines()
+                         if ln.strip() and not ln.strip().startswith("#")]
+            else:
+                reqs.append(f"{a} {p}")     # let pip report the missing file
+        else:
+            reqs.append(a)
+    return reqs
+
+
+def _wheel_cached(req: str) -> bool:
+    """True when the cold-start dir holds a wheel for this requirement's name
+    (case/underscore-normalized prefix match; git/URL lines never match)."""
+    global _CC_WHEEL_NAMES
+    name = re.split(r"[<>=!~\[;@ ]", req.strip(), 1)[0].strip().lower()
+    if not name or "://" in name or name.startswith(("-", "git+")):
+        return False
+    if _CC_WHEEL_NAMES is None:
+        _CC_WHEEL_NAMES = ([p.name.lower() for p in CC_WHEELS.iterdir()
+                            if p.name.lower().endswith(".whl")]
+                           if CC_WHEELS.is_dir() else [])
+    key = name.replace("-", "_") + "-"
+    return any(n.startswith(key) for n in _CC_WHEEL_NAMES)
+
+
+def _pip(*args):
+    """Cache-first install (cold-start law): one --no-index pass when the cache
+    satisfies the whole set, else per-requirement lines with cached wheels
+    first and the normal index last. A cache miss never gates the job."""
+    if CC_WHEELS.is_dir():
+        try:
+            _pip_raw("--no-index", "--find-links", str(CC_WHEELS), *args)
+            return
+        except subprocess.CalledProcessError as exc:
+            log(f"cache-only install failed (rc={exc.returncode}) -> per-line fallback")
+    for req in _req_lines(args):
+        cached = _wheel_cached(req)
+        try:
+            if cached:
+                _pip_raw("--no-index", "--find-links", str(CC_WHEELS), req)
+            else:
+                _pip_raw(req)
+        except subprocess.CalledProcessError:
+            if not cached:
+                raise               # index attempt failed — same as pre-cache behavior
+            log(f"cached wheel unusable for {req!r} -> normal index")
+            _pip_raw(req)
+
+
+def _cc_pull(tar_name: str, dest: Path) -> bool:
+    """curl one cache tar into /content and untar it. False = miss -> fallback."""
+    tgz = CC_ROOT / tar_name
+    try:
+        _sh(["curl", "-fsSL", "--retry", "2", "--max-time", "900",
+             "-o", str(tgz), CC_BASE + tar_name])
+        dest.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(tgz) as t:
+            try:
+                t.extractall(dest, filter="data")   # py>=3.11.4 / 3.12+
+            except TypeError:
+                t.extractall(dest)
+        log(f"cold-start: {tar_name} pulled + untarred")
+        return True
+    except Exception as exc:
+        log(f"cold-start cache miss ({tar_name}): {type(exc).__name__}: {exc} "
+            f"-> normal download path")
+        return False
+    finally:
+        if tgz.exists():
+            tgz.unlink()
+
+
+def _cc_bootstrap() -> dict:
+    """Fill /content/gmp_cc from the cache, once per runtime. Never raises."""
+    info = {"wheels": CC_WHEELS.is_dir(), "weights": (CC_WEIGHTS / "hub").is_dir()}
+    if info["wheels"] or info["weights"]:
+        return info
+    try:
+        CC_ROOT.mkdir(parents=True, exist_ok=True)
+        t0 = time.time()
+        info["wheels"] = _cc_pull("wheels.tar", CC_ROOT)
+        info["weights"] = _cc_pull("weights.tar", CC_WEIGHTS)
+        if info["weights"]:
+            os.environ["HF_HOME"] = str(CC_WEIGHTS)   # diffusers/transformers/HF hub read this
+        log(f"cold-start cache: wheels={info['wheels']} weights={info['weights']} "
+            f"in {time.time() - t0:.0f}s")
+    except Exception as exc:  # cache is a speedup, never a gate
+        log(f"cold-start cache skipped: {type(exc).__name__}: {exc}")
+    return info
 
 
 def _setup_env() -> None:
@@ -155,6 +274,7 @@ def _setup_env() -> None:
         log("setup: env marker found — skipping (idempotent re-entry)")
         return
     t0 = time.time()
+    _cc_bootstrap()   # cold-start wheels + weights (non-fatal)
     import torch
     log(f"torch {torch.__version__} cuda={torch.cuda.is_available()}")
     _pip("diffusers", "transformers", "accelerate")
