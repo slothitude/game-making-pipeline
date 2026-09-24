@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SCULMM scrub player</title>
+<style>
+  :root { --bg:#101318; --panel:#171b22; --line:#262c37; --txt:#d7dce4;
+          --dim:#8b94a3; --green:#3ecf8e; --amber:#e2b93b; --blue:#5aa7e8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; overflow:hidden; background:var(--bg);
+              color:var(--txt); font:13px/1.45 "Segoe UI",system-ui,sans-serif; }
+  #app { display:grid; grid-template-rows:1fr 190px; height:100%; }
+  #main { display:grid; grid-template-columns:1fr 320px; min-height:0; }
+  #viewport { position:relative; min-width:0; }
+  #viewport canvas { display:block; }
+  #drop { position:absolute; inset:0; display:flex; flex-direction:column;
+          gap:10px; align-items:center; justify-content:center;
+          background:rgba(16,19,24,.92); border:2px dashed var(--line);
+          z-index:5; text-align:center; padding:20px; }
+  #drop big { font-size:16px; }
+  #drop .hint { color:var(--dim); max-width:420px; }
+  #drop.drag { border-color:var(--blue); background:rgba(90,167,232,.08); }
+  #hud { position:absolute; top:10px; left:10px; z-index:4;
+         background:rgba(16,19,24,.75); border:1px solid var(--line);
+         border-radius:6px; padding:8px 12px; pointer-events:none; }
+  #hud .scene { font-weight:600; }
+  #hud .sub { color:var(--dim); font-size:11px; }
+  #side { border-left:1px solid var(--line); background:var(--panel);
+          overflow-y:auto; padding:10px 12px; display:flex;
+          flex-direction:column; gap:12px; min-height:0; }
+  .sec h3 { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+            color:var(--dim); margin-bottom:6px; }
+  .asset { display:flex; gap:8px; align-items:baseline; padding:4px 6px;
+           border-radius:4px; font-size:12px; }
+  .asset .dot { width:8px; height:8px; border-radius:50%; flex:none;
+                align-self:center; }
+  .asset.ok .dot { background:var(--green); }
+  .asset.miss .dot { background:var(--amber); }
+  .asset .ref { font-family:Consolas,monospace; }
+  .asset .sha { color:var(--dim); font-size:10px; margin-left:auto; }
+  .beatrow { display:flex; gap:8px; padding:4px 6px; border-radius:4px;
+             cursor:pointer; align-items:baseline; }
+  .beatrow:hover, .beatrow.sel { background:#202631; }
+  .beatrow .t { color:var(--blue); font-family:Consolas,monospace;
+                flex:none; width:52px; }
+  .beatrow .what { flex:1; min-width:0; }
+  .linerow { padding:3px 6px; color:var(--dim); font-size:12px; }
+  .linerow b { color:var(--txt); }
+  #inspect { background:#12151b; border:1px solid var(--line); border-radius:6px;
+             padding:8px; font-family:Consolas,monospace; font-size:11px;
+             white-space:pre-wrap; word-break:break-all; max-height:220px;
+             overflow:auto; color:#a9d5f2; }
+  #timeline { border-top:1px solid var(--line); background:var(--panel);
+              display:grid; grid-template-rows:34px 1fr 26px; }
+  #bar { position:relative; margin:10px 14px 2px; cursor:pointer; }
+  #bar .track { position:absolute; left:0; right:0; top:14px; height:6px;
+                background:#232a35; border-radius:3px; }
+  #bar .fill { position:absolute; left:0; top:14px; height:6px;
+               background:var(--blue); border-radius:3px; width:0; }
+  #bar .head { position:absolute; top:6px; width:2px; height:22px;
+               background:#fff; margin-left:-1px; }
+  #bar .mk { position:absolute; top:10px; width:3px; height:14px;
+             background:var(--green); border-radius:1px; cursor:pointer; }
+  #lanes { position:relative; margin:0 14px; overflow:hidden; }
+  .lane { position:relative; height:18px; margin-bottom:3px; }
+  .lane .lbl { position:absolute; left:0; top:1px; font-size:10px;
+               color:var(--dim); z-index:2; pointer-events:none; }
+  .blk { position:absolute; top:2px; height:14px; border-radius:3px;
+         background:repeating-linear-gradient(-45deg,#2b537f,#2b537f 5px,
+                     #23476b 5px,#23476b 10px); border:1px solid #3f6ba0; }
+  .blk .lab { position:absolute; inset:0; font-size:9px; color:#cfe4f7;
+              overflow:hidden; white-space:nowrap; padding:1px 4px; }
+  #controls { display:flex; gap:14px; align-items:center; padding:0 14px;
+              color:var(--dim); font-size:12px; }
+  button { background:#202631; color:var(--txt); border:1px solid var(--line);
+           border-radius:4px; padding:3px 14px; cursor:pointer;
+           font:inherit; }
+  button:hover { background:#2a3240; }
+  #clock { font-family:Consolas,monospace; color:var(--txt); }
+  input[type=file] { display:none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="main">
+    <div id="viewport">
+      <div id="drop">
+        <big>SCULMM scrub player</big>
+        <div class="hint">Drop a compiled <b>.sculmmc.json</b> here (timeline
+        truth) — and optionally its source <b>.sculmm.json</b> (world
+        geometry). Or:</div>
+        <div>
+          <button onclick="document.getElementById('f1').click()">load .sculmmc.json</button>
+          <button onclick="document.getElementById('f2').click()">load .sculmm.json</button>
+          <input type="file" id="f1" accept=".json">
+          <input type="file" id="f2" accept=".json">
+        </div>
+        <div class="hint" id="lastHint"></div>
+      </div>
+      <div id="hud" style="display:none">
+        <div class="scene" id="hudScene"></div>
+        <div class="sub" id="hudSub"></div>
+      </div>
+    </div>
+    <div id="side">
+      <div class="sec"><h3>Assets</h3><div id="assets"></div></div>
+      <div class="sec"><h3>Beats</h3><div id="beats"></div></div>
+      <div class="sec"><h3>Lines</h3><div id="lines"></div></div>
+      <div class="sec"><h3>Beat inspector</h3><div id="inspect">click a beat
+        marker (timeline) or a beat row</div></div>
+    </div>
+  </div>
+  <div id="timeline">
+    <div id="bar"><div class="track"></div><div class="fill"></div>
+      <div class="head"></div></div>
+    <div id="lanes"></div>
+    <div id="controls">
+      <button id="playBtn">play</button>
+      <span id="clock">0.00 / 0.00 s</span>
+      <span>space = play/pause · drag bar = scrub · green ticks = beats</span>
+      <span id="mode" style="margin-left:auto"></span>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.164.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.164.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ---------------- state ---------------- */
+let cuec = null, world = null;      // compiled timeline + source world
+let T = 0, playing = false, lastTick = 0;
+let roomGroup = null, actors = {}, props = {};
+const sel = { beat: null };
+
+/* ---------------- three.js scene ---------------- */
+const vp = document.getElementById('viewport');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+vp.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1015);
+const cam = new THREE.PerspectiveCamera(46, 1, .1, 200);
+cam.position.set(0, 4.6, 11.5); cam.lookAt(0, 1.6, 0);
+const controls = new OrbitControls(cam, renderer.domElement);
+controls.target.set(0, 1.6, 0);
+scene.add(new THREE.AmbientLight(0xffffff, .55));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.5);
+sun.position.set(5, 9, 6); scene.add(sun);
+const rim = new THREE.DirectionalLight(0x88aaff, .5);
+rim.position.set(-6, 4, -5); scene.add(rim);
+
+function resize() {
+  const w = vp.clientWidth, h = vp.clientHeight;
+  renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+/* Toon look: 3-step gradient + back-face outline (the cel pass) */
+/* cuec asset paths are relative to the served root (cue_dev/), while this
+   page lives under /player/ — resolve accordingly */
+const assetURL = p =>
+  new URL(p.replaceAll('\\', '/'),
+          location.href.replace(/player\/[^/?#]*$/, '')).toString();
+
+const grad = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1,
+                                   THREE.RedFormat);
+grad.needsUpdate = true; grad.minFilter = grad.magFilter = THREE.NearestFilter;
+function toonMat(color) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: grad });
+}
+function withOutline(mesh, scale = 1.035) {
+  const o = new THREE.Mesh(mesh.geometry,
+    new THREE.MeshBasicMaterial({ color: 0x0a0c10, side: THREE.BackSide }));
+  o.scale.multiplyScalar(scale);
+  const grp = new THREE.Group(); grp.add(mesh); grp.add(o);
+  return grp;
+}
+function labelSprite(text, color = '#e2b93b') {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 96;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(10,12,16,.82)'; g.fillRect(0, 0, 512, 96);
+  g.strokeStyle = color; g.lineWidth = 4; g.strokeRect(2, 2, 508, 92);
+  g.fillStyle = color; g.font = 'bold 34px Consolas,monospace';
+  g.textAlign = 'center'; g.fillText(text.slice(0, 30), 256, 60);
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false }));
+  s.scale.set(2.2, .42, 1); return s;
+}
+
+/* ---------------- world build (from source .sculmm.json) ---------------- */
+function buildWorld() {
+  if (roomGroup) scene.remove(roomGroup);
+  roomGroup = new THREE.Group(); actors = {}; props = {};
+  const rooms = (world?.world?.rooms) || [];
+  const room = rooms[0];
+  if (!room) return;
+  const sh = room.shell || {};
+  const [fw, fd] = (sh.floor?.size_m) || [9, 6];
+  // floor
+  const floor = withOutline(new THREE.Mesh(
+    new THREE.BoxGeometry(fw, .18, fd), toonMat(0x50565e)));
+  floor.position.y = -.09; roomGroup.add(floor);
+  // walls (from shell.walls[], +z = north)
+  for (const w of (sh.walls || [])) {
+    const north = w.wall === 'north';
+    const geo = new THREE.BoxGeometry(w.width_m || fw, w.height_m || 7, .25);
+    const wall = withOutline(new THREE.Mesh(geo, toonMat(0x6b6455)));
+    wall.position.set(0, (w.height_m || 7) / 2, north ? fd / 2 : -fd / 2);
+    if (!north) wall.rotation.y = w.wall === 'east' ? Math.PI / 2 : -Math.PI / 2;
+    roomGroup.add(wall);
+  }
+  // backdrop plane (book asset; resolved -> textured, else missing badge)
+  const bp = cuec?.assets?.['backdrop:' + room.backdrop];
+  const bplane = new THREE.Mesh(new THREE.PlaneGeometry(fw, (7.5 / 7.5) * 4.6),
+    toonMat(0x39404b));
+  bplane.position.set(0, 3.4, fd / 2 - .35);
+  roomGroup.add(bplane);
+  if (bp && bp.sha256) {
+    new THREE.TextureLoader().load(assetURL(bp.path),
+      t => { bplane.material.map = t; bplane.material.needsUpdate = true; });
+  }
+  // props (anchor vocabulary)
+  const P = (world?.world?.props) || [];
+  const posOf = {};
+  for (const p of P) {
+    const grp = new THREE.Group();
+    const mesh = withOutline(new THREE.Mesh(
+      new THREE.BoxGeometry(.9, 1.1, .5), toonMat(0x7d8794)));
+    mesh.position.y = .55; grp.add(mesh);
+    // placement
+    const pl = p.place;
+    let x = 0, z = 0, y = 0;
+    if (pl === 'center') { x = 0; z = 0; }
+    else if (String(pl).startsWith('against_wall')) {
+      const side = String(pl).split(':')[1] || 'north';
+      x = (P.length > 1) ? -1.6 + P.indexOf(p) * 3.2 : 0;
+      if (side === 'north') { z = fd / 2 - .55; y = 2.1; }
+      else z = -fd / 2 + .55;
+    } else if (pl && typeof pl === 'object') {
+      const ref = pl.left_of || pl.right_of;
+      const rp = posOf[ref] || { x: 0, z: 0, y: 0 };
+      x = rp.x + (pl.left_of ? -1.4 : 1.4); z = rp.z; y = rp.y;
+    }
+    posOf[p.name] = { x, z, y };
+    grp.position.set(x, y, z);
+    // missing asset badge (work order law)
+    const miss = (cuec?.missing_assets || []).find(m =>
+      m.ref === p.name || m.ref === (p.model_ref || '').split('/').pop());
+    const res = p.model_ref &&
+      cuec?.assets?.['model:' + p.model_ref];
+    if (miss || !res) {
+      if (miss) { const l = labelSprite('⌛ ' + (miss.kind || 'asset') +
+        ' · ' + miss.ref); l.position.set(0, 1.5, 0); grp.add(l); }
+    } else {
+      new GLTFLoader().load(assetURL(p.model_ref), g => {
+        grp.remove(mesh);
+        const m = g.scene.children[0];
+        m.traverse(o => { if (o.isMesh) o.material = toonMat(
+          o.material?.color?.getHex() || 0x9aa4b0); });
+        m.position.y = 0; grp.add(m);
+      });
+    }
+    props[p.name] = grp; roomGroup.add(grp);
+  }
+  // actors (tier placeholder figure: cel capsule + head; real assets land
+  // when their work orders resolve)
+  for (const a of (world?.world?.actors || [])) {
+    const g = new THREE.Group();
+    const body = withOutline(new THREE.Mesh(
+      new THREE.CapsuleGeometry(.34, 1.05, 6, 14), toonMat(0x4f7ec2)));
+    body.position.y = 1.0; g.add(body);
+    const head = withOutline(new THREE.Mesh(
+      new THREE.SphereGeometry(.30, 18, 14), toonMat(0xd9b38c)));
+    head.position.y = 1.92; g.add(head);
+    const l = labelSprite(a.name, '#5aa7e8'); l.position.set(0, 2.5, 0);
+    g.add(l);
+    g.position.set(-fw / 2 - 1.2, 0, 0);     // off-stage left (door side)
+    actors[a.name] = { grp: g, base: g.position.clone(), t0: -1 };
+    roomGroup.add(g);
+  }
+  scene.add(roomGroup);
+}
+
+/* ---------------- timeline truth (cuec) ---------------- */
+function evalAt(t) {
+  if (!cuec) return;
+  for (const b of cuec.beats) {
+    for (const c of b.cues) {
+      const a = actors[c.actor];
+      if (!a) continue;
+      if (c.do === 'enter') {
+        const k = THREE.MathUtils.clamp((t - c.t0) / Math.max(c.t1 - c.t0, .001), 0, 1);
+        a.grp.position.set(
+          THREE.MathUtils.lerp(-5.6, -1.4, k), 0, THREE.MathUtils.lerp(.2, .4, k));
+        a.t0 = c.t0;
+      } else if (c.do === 'exit') {
+        const k = THREE.MathUtils.clamp((t - c.t0) / Math.max(c.t1 - c.t0, .001), 0, 1);
+        a.grp.position.x = THREE.MathUtils.lerp(-1.4, 6.4, k);
+      }
+    }
+  }
+  // perform/gesture: procedural walk/talk bob inside the cue window
+  for (const b of cuec.beats) for (const c of b.cues) {
+    const a = actors[c.actor]; if (!a) continue;
+    const inWin = t >= c.t0 && t < c.t1;
+    if ((c.do === 'perform' || c.do === 'gesture') && inWin) {
+      const f = (t - c.t0);
+      if (c.do === 'perform') {           // walk-cycle approximation
+        a.grp.position.x += 0;            // path held; motion = steps
+        a.grp.position.y = Math.abs(Math.sin(f * 6.2)) * .05;
+        a.grp.rotation.y = Math.sin(f * 3.1) * .06;
+      } else {                            // talk/gesture bob
+        a.grp.position.y = Math.abs(Math.sin(f * 2.4)) * .035;
+      }
+    }
+  }
+}
+
+/* ---------------- UI: panels, timeline ---------------- */
+const $ = id => document.getElementById(id);
+function fmt(n) { return n.toFixed(2); }
+
+function renderUI() {
+  $('hudScene').textContent = cuec?.scene || '—';
+  $('hudSub').textContent =
+    `${cuec?.book || ''} · seed ${cuec?.seed ?? '—'} · clock ${cuec?.clock}` +
+    ` · ${fmt(cuec?.duration || 0)}s · v${cuec?.version}`;
+  $('hud').style.display = '';
+  // assets panel
+  const A = $('assets'); A.innerHTML = '';
+  for (const [k, v] of Object.entries(cuec?.assets || {})) {
+    A.insertAdjacentHTML('beforeend',
+      `<div class="asset ok"><span class="dot"></span>
+       <span class="ref">${k}</span>
+       <span class="sha">${v.sha256 ? v.sha256.slice(0, 8) : 'no-hash'}</span></div>`);
+  }
+  for (const m of (cuec?.missing_assets || [])) {
+    A.insertAdjacentHTML('beforeend',
+      `<div class="asset miss"><span class="dot"></span>
+       <span class="ref">work-order: ${m.kind} · ${m.ref}</span></div>`);
+  }
+  // beats panel
+  const B = $('beats'); B.innerHTML = '';
+  cuec?.beats.forEach((b, i) => {
+    const what = b.cues.map(c => c.do + (c.actor ? '·' + c.actor : '') +
+      (c.clip ? '·' + c.clip : '')).join(', ');
+    B.insertAdjacentHTML('beforeend',
+      `<div class="beatrow" data-i="${i}">
+       <span class="t">${fmt(b.at_seconds)}s</span>
+       <span class="what">${b.at} — ${what}</span></div>`);
+  });
+  B.querySelectorAll('.beatrow').forEach(r =>
+    r.onclick = () => inspect(parseInt(r.dataset.i)));
+  // lines panel
+  const L = $('lines'); L.innerHTML = '';
+  (cuec?.lines || []).forEach(ln =>
+    L.insertAdjacentHTML('beforeend',
+      `<div class="linerow"><b>${ln.speaker}</b> ·
+       ${ln.placeholder_dur_s}s — ${ln.text.slice(0, 72)}…</div>`));
+  // timeline
+  const dur = cuec?.duration || 1;
+  const bar = $('bar');
+  bar.querySelectorAll('.mk').forEach(e => e.remove());
+  cuec?.beats.forEach((b, i) => {
+    const m = document.createElement('div');
+    m.className = 'mk';
+    m.style.left = (b.at_seconds / dur * 100) + '%';
+    m.onclick = ev => { ev.stopPropagation(); inspect(i); seek(b.at_seconds); };
+    bar.appendChild(m);
+  });
+  const lanes = $('lanes'); lanes.innerHTML = '';
+  let y = 0;
+  (cuec?.lines || []).forEach(ln => {
+    const start = lineStart(ln.id);
+    const lane = document.createElement('div');
+    lane.className = 'lane'; lane.style.top = y + 'px';
+    const blk = document.createElement('div');
+    blk.className = 'blk';
+    blk.style.left = (start / dur * 100) + '%';
+    blk.style.width = (ln.placeholder_dur_s / dur * 100) + '%';
+    blk.innerHTML = `<div class="lab">line ${ln.id} · ${ln.speaker}` +
+      ` · ${ln.placeholder_dur_s}s</div>`;
+    lane.appendChild(blk); lanes.appendChild(lane); y += 21;
+  });
+  $('mode').textContent = cuec?.mode || '';
+}
+function lineStart(id) {
+  let t = 0;
+  for (const ln of (cuec?.lines || [])) {
+    if (ln.id === id) return t;
+    t += ln.placeholder_dur_s + .35;
+  }
+  return t;
+}
+function inspect(i) {
+  const b = cuec?.beats[i]; if (!b) return;
+  $('inspect').textContent = JSON.stringify(b, null, 1);
+  document.querySelectorAll('.beatrow').forEach(r =>
+    r.classList.toggle('sel', parseInt(r.dataset.i) === i));
+}
+
+/* scrub / play */
+const bar = $('bar');
+function seek(frac) {
+  T = THREE.MathUtils.clamp(frac, 0, cuec?.duration || 0);
+  paint();
+}
+bar.onmousedown = e => {
+  const move = ev => seek((ev.clientX - bar.getBoundingClientRect().left)
+    / bar.clientWidth);
+  move(e);
+  const up = () => { removeEventListener('mousemove', move);
+                     removeEventListener('mouseup', up); };
+  addEventListener('mousemove', move); addEventListener('mouseup', up);
+};
+function paint() {
+  const dur = cuec?.duration || 1;
+  $('bar').querySelector('.fill').style.width = (T / dur * 100) + '%';
+  $('bar').querySelector('.head').style.left = (T / dur * 100) + '%';
+  $('clock').textContent = `${fmt(T)} / ${fmt(dur)} s`;
+}
+function tick(ts) {
+  requestAnimationFrame(tick);
+  const dt = (ts - lastTick) / 1000; lastTick = ts;
+  if (playing && cuec) {
+    T += dt;
+    if (T >= cuec.duration) { T = cuec.duration; playing = false;
+      $('playBtn').textContent = 'play'; }
+    paint();
+  }
+  if (cuec) evalAt(T);
+  controls.update();
+  renderer.render(scene, cam);
+}
+$('playBtn').onclick = toggle;
+function toggle() {
+  playing = !playing;
+  if (playing && cuec && T >= cuec.duration) T = 0;
+  $('playBtn').textContent = playing ? 'pause' : 'play';
+}
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); toggle(); }
+});
+
+/* ---------------- loading ---------------- */
+function hideDrop() { $('drop').style.display = 'none'; }
+function accept(name, json) {
+  const isC = name.endsWith('.sculmmc.json') ||
+    (json.beats && json.at_seconds !== undefined) || json.mode === 'sculmm2';
+  const isSrc = name.endsWith('.sculmm.json') || !!json.world;
+  if (isC) cuec = json;
+  else if (isSrc) world = json;
+  localStorage.setItem('sculmm:last:' + (isC ? 'cuec' : 'src'),
+                       JSON.stringify({ name, json }));
+  if (cuec) { buildWorld(); renderUI(); T = 0; paint(); hideDrop(); }
+  else if (world) { buildWorld(); hideDrop(); }
+}
+function wireInput(id) {
+  $(id).onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    f.text().then(t => { try { accept(f.name, JSON.parse(t)); }
+                         catch (err) { alert('bad JSON: ' + err); } });
+  };
+}
+wireInput('f1'); wireInput('f2');
+const drop = $('drop');
+['dragover', 'dragenter'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault();
+    drop.classList.add('drag'); }));
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('drag');
+  for (const f of e.dataTransfer.files)
+    f.text().then(t => { try { accept(f.name, JSON.parse(t)); }
+                         catch (err) { console.warn(f.name, err); } });
+});
+// restore last session from localStorage (remember-last law)
+(function restore() {
+  const c = localStorage.getItem('sculmm:last:cuec');
+  const s = localStorage.getItem('sculmm:last:src');
+  const names = [];
+  try {
+    if (s) { world = JSON.parse(JSON.parse(s).json); names.push('world'); }
+    if (c) { cuec = JSON.parse(JSON.parse(c).json); names.push('cuec'); }
+  } catch (e) { console.warn('restore failed', e); }
+  if (cuec || world) {
+    buildWorld(); if (cuec) { renderUI(); paint(); } hideDrop();
+    $('lastHint').textContent = '(loaded ' + names.join(' + ') +
+      ' from last session — drop files to replace)';
+  }
+})();
+
+resize();
+requestAnimationFrame(tick);
+
+// debug/deep-link hook (also how tests load scenes programmatically)
+window.__sculmm = { accept, seek: t => { T = t; paint(); },
+                    play: toggle, state: () => ({ T, playing, cuec, world }) };
+</script>
+</body>
+</html>

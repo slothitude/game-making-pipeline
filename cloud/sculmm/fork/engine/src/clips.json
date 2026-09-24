@@ -1,0 +1,32 @@
+{
+ "ardy:walk": {
+  "path": "cast/pandemonium/walk_bones.json",
+  "location": "lappy",
+  "dur_s": 5.0,
+  "src": "ARDY text-to-motion, prompt 'A person walks forward, stops, turns around, and waves.', seed 42, converted by ardy_to_bones.py 2026-09-20"
+ },
+ "ardy:run": {
+  "path": "cast/pandemonium/running.json",
+  "location": "lappy",
+  "dur_s": 0.733,
+  "src": "ARDY text-to-motion, prompt 'A person runs in place.', seed 8, converted by ardy_to_bones.py 2026-09-20"
+ },
+ "mixamo:jumping_up": {
+  "path": "cast/pandemonium/jumping_up.json",
+  "location": "lappy",
+  "dur_s": 0.233,
+  "src": "Mixamo Action Pack, sampled by sample_bones.gd 2026-09-19"
+ },
+ "mixamo:hard_landing": {
+  "path": "cast/pandemonium/hard_landing.json",
+  "location": "lappy",
+  "dur_s": 2.0,
+  "src": "Mixamo Action Pack, sampled by sample_bones.gd 2026-09-19"
+ },
+ "mixamo:nod_yes": {
+  "path": "cast/pandemonium/nod_yes.json",
+  "location": "lappy",
+  "dur_s": 2.6,
+  "src": "Mixamo Gestures Pack, sampled by sample_bones.gd 2026-09-19"
+ }
+}
