@@ -100,6 +100,11 @@ def run(job: dict) -> dict:
     cmd = ["python3", SCRIPT, "--game", game, "--prompt", prompt, "--no-deploy"]
     if asset_id:
         cmd += ["--asset-id", asset_id]
+    # optional order tuning the work-order CLI already speaks (schemas/art_work_order.md)
+    for key in ("style", "opaque_min", "opaque_max", "mean_color"):
+        val = payload.get(key)
+        if val is not None:
+            cmd += [f"--{key.replace('_', '-')}", str(val)]
     env = dict(os.environ)
     if not env.get("GAME_ROOTS"):
         # art_work_order.py reads GAME_ROOTS as a JSON dict {game: dir}
