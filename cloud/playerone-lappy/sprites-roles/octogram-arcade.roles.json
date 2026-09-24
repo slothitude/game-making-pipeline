@@ -1,0 +1,6 @@
+{
+  "player": {},
+  "threats": {},
+  "items": {},
+  "note": "generated art is UI plates only (board_face/tile_face/background_texture/logo_plate) - no actor sprites exist, so this game has no template roles. Perception runs but returns empty detections."
+}

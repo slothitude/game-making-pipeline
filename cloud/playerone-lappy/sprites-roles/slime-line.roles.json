@@ -1,0 +1,6 @@
+{
+  "player": {"slug_player": 69},
+  "threats": {"bug_green": 39, "bug_gold": 39},
+  "items": {"salt_crystal": 42},
+  "note": "sizes from scripts/feel.gd (SLUG_SPRITE_SCALE 0.09 -> ~57x69, BUG_SPRITE_SCALE 0.062 -> ~39); salt = scripts/salt.gd collectable. tile_garden/title_logo ignored."
+}

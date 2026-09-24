@@ -1,0 +1,6 @@
+{
+  "player": {"hero_idle": 56},
+  "threats": {"enemy_agent": 60},
+  "items": {"bullet": 36},
+  "note": "roles from scripts/player.gd + feel.gd TEX_HERO/TEX_ENEMY_AGENT; bullet = weapon.gd projectile. Sizes estimated (feel.gd draws via make_sprite target_size) - calibrate from live captures. explosion/title_logo ignored."
+}

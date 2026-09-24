@@ -1,0 +1,6 @@
+{
+  "player": {"player_p51": 79, "player_bank_left": 65},
+  "threats": {"enemy_fighter": 74, "enemy_bomber": 85, "enemy_ufo": 78, "boss_fortress": 175, "bullet_enemy": 32},
+  "items": {"bullet_player": 40},
+  "note": "sizes read straight off scripts/feel.gd comments (PLANE_SPRITE_SCALE 0.16 -> ~79px on a 540 screen, FIGHTER 0.10, BOMBER 0.11, BOSS1 0.22, bullets 0.05/0.045). player_bank_left = the plane.gd banking pose. tile_sea ignored."
+}
