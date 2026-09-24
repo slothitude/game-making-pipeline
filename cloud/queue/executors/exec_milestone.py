@@ -52,7 +52,7 @@ PI_BIN = "pi"
 # GMP_PI_MODEL pins one concrete free model (still openrouter, still free —
 # the workers law is about the lane, not the alias). Default unchanged.
 PI_MODEL = os.environ.get("GMP_PI_MODEL", "openrouter/free")
-PI_TIMEOUT = 900         # a silent hang must cost minutes, not half an hour
+PI_TIMEOUT = int(os.environ.get("PI_TIMEOUT", "3600"))         # a silent hang must cost minutes, not half an hour
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
