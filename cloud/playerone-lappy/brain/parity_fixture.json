@@ -1,0 +1,723 @@
+{
+ "fixtures": [
+  {
+   "checkpoint": "synthetic",
+   "rows": [
+    {
+     "context": "Choose the exact badge coral ibis. Notes: north north north north south east west east. Badge: coral ibis.",
+     "options": [
+      "coral heron",
+      "coral ibis"
+     ],
+     "torch_probs": [
+      1.3e-08,
+      1.0
+     ],
+     "label": 1
+    },
+    {
+     "context": "Choose the exact badge azure falcon. Notes: north east east south west south east north. Badge: azure falcon.",
+     "options": [
+      "indigo dolphin",
+      "green falcon",
+      "green dolphin",
+      "bronze gecko",
+      "azure falcon"
+     ],
+     "torch_probs": [
+      0.0,
+      3.337e-06,
+      4e-09,
+      0.0,
+      0.999996662
+     ],
+     "label": 4
+    },
+    {
+     "context": "Choose the exact badge crimson jaguar. Notes: west west west east south west north west. Badge: crimson jaguar.",
+     "options": [
+      "bronze ibis",
+      "amber badger",
+      "crimson jaguar",
+      "amber jaguar"
+     ],
+     "torch_probs": [
+      5.3e-07,
+      0.0,
+      0.999999523,
+      7e-09
+     ],
+     "label": 2
+    },
+    {
+     "context": "Choose the exact badge azure jaguar. Notes: east south east north west west east east. Badge: azure jaguar.",
+     "options": [
+      "crimson dolphin",
+      "azure jaguar",
+      "indigo ibis"
+     ],
+     "torch_probs": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "label": 1
+    },
+    {
+     "context": "Choose the exact badge amber jaguar. Notes: north north east east west north south north. Badge: amber jaguar.",
+     "options": [
+      "amber jaguar",
+      "indigo crane",
+      "green crane",
+      "green dolphin",
+      "bronze ibis",
+      "coral ibis",
+      "indigo ibis",
+      "gold gecko"
+     ],
+     "torch_probs": [
+      0.999988317,
+      6.1e-08,
+      3.824e-06,
+      6.605e-06,
+      6.2e-08,
+      0.0,
+      3e-09,
+      1.124e-06
+     ],
+     "label": 0
+    },
+    {
+     "context": "Choose the exact badge crimson badger. Notes: north west west south north south west south. Badge: crimson badger.",
+     "options": [
+      "green gecko",
+      "amber falcon",
+      "green jaguar",
+      "azure crane",
+      "gold jaguar",
+      "crimson badger",
+      "amber badger"
+     ],
+     "torch_probs": [
+      2e-09,
+      6.7e-08,
+      1.7e-08,
+      1.2e-08,
+      0.0,
+      0.999062359,
+      0.000937505
+     ],
+     "label": 5
+    },
+    {
+     "context": "Choose the exact badge indigo crane. Notes: west west north north north south south north. Badge: indigo crane.",
+     "options": [
+      "coral ibis",
+      "coral heron",
+      "indigo crane"
+     ],
+     "torch_probs": [
+      1.9e-08,
+      0.0,
+      1.0
+     ],
+     "label": 2
+    },
+    {
+     "context": "Choose the exact badge azure crane. Notes: north north east south west west south south. Badge: azure crane.",
+     "options": [
+      "azure falcon",
+      "azure crane"
+     ],
+     "torch_probs": [
+      2.8877e-05,
+      0.999971151
+     ],
+     "label": 1
+    },
+    {
+     "context": "Choose the exact badge amber dolphin. Notes: north west south west west north west south. Badge: amber dolphin.",
+     "options": [
+      "amber dolphin",
+      "bronze crane",
+      "coral jaguar"
+     ],
+     "torch_probs": [
+      0.999905467,
+      1.6177e-05,
+      7.8364e-05
+     ],
+     "label": 0
+    },
+    {
+     "context": "Choose the exact badge indigo falcon. Notes: south west south east east north west east. Badge: indigo falcon.",
+     "options": [
+      "coral jaguar",
+      "indigo falcon"
+     ],
+     "torch_probs": [
+      1.55e-07,
+      0.999999881
+     ],
+     "label": 1
+    }
+   ]
+  },
+  {
+   "checkpoint": "playerone-sonar",
+   "rows": [
+    {
+     "context": "SONAR air 50; jelly C near; sub mid; echo yes; ping cool",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.34e-07,
+      0.0,
+      1.8e-08,
+      0.0,
+      0.999999642,
+      0.0,
+      2e-09,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 4
+    },
+    {
+     "context": "SONAR air 46; jelly none; sub mid; echo no; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.99974364,
+      0.000256405
+     ],
+     "label": 8
+    },
+    {
+     "context": "SONAR air 42; jelly C near; sub mid; echo yes; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.87e-07,
+      0.0,
+      3.3e-08,
+      0.0,
+      0.999999404,
+      0.0,
+      5e-09,
+      0.0,
+      1e-09,
+      8.7e-08
+     ],
+     "label": 4
+    },
+    {
+     "context": "SONAR air 53; jelly none; sub mid; echo no; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      2.3974e-05,
+      1.54e-07,
+      3.968e-06,
+      5.22e-07,
+      0.000226551,
+      8.48e-07,
+      3.439e-06,
+      2.35e-07,
+      0.999364913,
+      0.000375341
+     ],
+     "label": 8
+    },
+    {
+     "context": "SONAR air 50; jelly C near; sub mid; echo yes; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.74e-07,
+      0.0,
+      1.9e-08,
+      0.0,
+      0.999999642,
+      0.0,
+      3e-09,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 4
+    },
+    {
+     "context": "SONAR air 46; jelly none; sub mid; echo no; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.99974364,
+      0.000256405
+     ],
+     "label": 8
+    },
+    {
+     "context": "SONAR air 42; jelly C near; sub mid; echo yes; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.87e-07,
+      0.0,
+      3.3e-08,
+      0.0,
+      0.999999404,
+      0.0,
+      5e-09,
+      0.0,
+      1e-09,
+      8.7e-08
+     ],
+     "label": 4
+    },
+    {
+     "context": "SONAR air 54; jelly none; sub mid; echo no; ping ready",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.01e-07,
+      2e-09,
+      5e-08,
+      7e-09,
+      2.847e-06,
+      1.1e-08,
+      4.3e-08,
+      3e-09,
+      0.999992013,
+      4.718e-06
+     ],
+     "label": 8
+    },
+    {
+     "context": "SONAR air 50; jelly C near; sub mid; echo yes; ping cool",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.34e-07,
+      0.0,
+      1.8e-08,
+      0.0,
+      0.999999642,
+      0.0,
+      2e-09,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 4
+    },
+    {
+     "context": "SONAR air 47; jelly none; sub mid; echo no; ping cool",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (240, 717)",
+      "wait"
+     ],
+     "torch_probs": [
+      3.23e-07,
+      1e-09,
+      3.4e-08,
+      2e-09,
+      5.0202e-05,
+      3e-09,
+      2.9e-08,
+      1e-09,
+      7.321e-05,
+      0.999876142
+     ],
+     "label": 9
+    }
+   ]
+  },
+  {
+   "checkpoint": "playerone-slime",
+   "rows": [
+    {
+     "context": "SLIME gap touch; lead W; tilt left; plan tap (157, 688)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (157, 688)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     "label": 8
+    },
+    {
+     "context": "SLIME gap near; lead S; tilt left; plan drag from (240, 430) to (240, 600)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      6.01e-06,
+      0.0,
+      2e-09,
+      0.000353312,
+      0.999622822,
+      1.7873e-05,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 4
+    },
+    {
+     "context": "SLIME gap mid; lead NW; tilt left; plan drag from (240, 430) to (120, 310)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.001348467,
+      8.59e-07,
+      3e-09,
+      1.37e-07,
+      3.1731e-05,
+      0.817755938,
+      3.86e-07,
+      0.180862531,
+      0.0
+     ],
+     "label": 7
+    },
+    {
+     "context": "SLIME gap near; lead SE; tilt left; plan drag from (240, 430) to (360, 550)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.999999046,
+      0.0,
+      9.74e-07,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 3
+    },
+    {
+     "context": "SLIME gap mid; lead N; tilt left; plan drag from (240, 430) to (240, 260)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.999992728,
+      0.0,
+      0.0,
+      0.0,
+      7.167e-06,
+      0.0,
+      1.06e-07,
+      0.0,
+      0.0
+     ],
+     "label": 0
+    },
+    {
+     "context": "SLIME gap touch; lead S; tilt left; plan tap (170, 718)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (170, 718)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     "label": 8
+    },
+    {
+     "context": "SLIME gap touch; lead E; tilt left; plan tap (190, 715)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "tap (190, 715)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     "label": 8
+    },
+    {
+     "context": "SLIME gap mid; lead E; tilt left; plan drag from (240, 430) to (410, 430)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      1e-09,
+      2.682e-06,
+      0.999926329,
+      6.763e-05,
+      3e-09,
+      3e-09,
+      2.754e-06,
+      3.6e-08,
+      5.52e-07
+     ],
+     "label": 2
+    },
+    {
+     "context": "SLIME gap near; lead E; tilt left; plan drag from (240, 430) to (410, 430)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      1.4e-08,
+      0.002595696,
+      0.997404277,
+      0.0,
+      0.0,
+      4e-09,
+      0.0,
+      0.0
+     ],
+     "label": 2
+    },
+    {
+     "context": "SLIME gap near; lead SW; tilt mid; plan drag from (240, 430) to (120, 550)",
+     "options": [
+      "drag from (240, 430) to (240, 260)",
+      "drag from (240, 430) to (360, 310)",
+      "drag from (240, 430) to (410, 430)",
+      "drag from (240, 430) to (360, 550)",
+      "drag from (240, 430) to (240, 600)",
+      "drag from (240, 430) to (120, 550)",
+      "drag from (240, 430) to (70, 430)",
+      "drag from (240, 430) to (120, 310)",
+      "wait"
+     ],
+     "torch_probs": [
+      0.0,
+      0.0,
+      0.0,
+      4e-09,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "label": 5
+    }
+   ]
+  }
+ ]
+}

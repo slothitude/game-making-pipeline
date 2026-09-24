@@ -1,0 +1,1 @@
+{"encoder": "tiny", "hf_model": "Qwen/Qwen2.5-0.5B", "width": 128, "rank": 128, "context_tokens": 192, "option_tokens": 40}
