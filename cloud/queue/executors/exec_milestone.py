@@ -52,7 +52,7 @@ PI_TIMEOUT = 1800        # milestone-depth build; the brain gets room
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
-FORGEJO_TOKEN = "${FORGEJO_TOKEN}"  # basic-auth token; FORGEJO_TOKEN env overrides
+FORGEJO_TOKEN = "d4debb443b2ccc21"  # basic-auth token; FORGEJO_TOKEN env overrides
 PUSH_BRANCH = "main"     # the branch the Actions gate wall watches
 
 PROMPT_LAWS = """LAWS (never break):
@@ -313,8 +313,27 @@ def await_wall(game, sha, timeout=900):
     return None, None
 
 
+ACTIONS_LOG_DIR = "/home/ubuntu/forgejo/gitea/data/actions_log"  # runner log
+# storage: {org}/{game}/{run_id:02x}/{run_id}.log.zst. FORGEJO_ACTIONS_LOG_DIR
+# overrides. This is the ONLY log source on Forgejo <= v10 — the
+# /actions/jobs/{id}/logs API route does not exist there (added in v11).
+
+
+def _distill(text, limit=6000):
+    """The failing-check lines, not the whole wall log."""
+    keys = ("error", "fail", "assert", "script", "parse", "passed", "checks")
+    lines = [ln for ln in text.splitlines()
+             if any(k in ln.lower() for k in keys)]
+    tail = chr(10).join((lines or text.splitlines())[-40:])
+    return tail[-limit:]
+
+
 def fail_logs(game, task_id):
-    """Best-effort tail of the failing job's log (the learner's food)."""
+    """Best-effort tail of the failing job's log (the learner's food).
+
+    The Forgejo v10 API has no job-logs route (404 — it landed in v11), so
+    read the runner's zstd log straight off disk, and keep the API as the
+    primary path for when the Forgejo is upgraded."""
     import urllib.request, base64
     host = os.environ.get("FORGEJO_HOST", FORGEJO_HOST)
     org = os.environ.get("FORGEJO_ORG", FORGEJO_ORG)
@@ -325,14 +344,19 @@ def fail_logs(game, task_id):
                    base64.b64encode(f"{org}:{tok}".encode()).decode())
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
-        lines = [ln for ln in text.splitlines()
-                 if any(k in ln.lower() for k in
-                        ("error", "fail", "assert", "script", "parse"))]
-        tail = chr(10).join((lines or text.splitlines())[-40:])
-        return tail[-6000:]
+            return _distill(resp.read().decode("utf-8", errors="replace"))
+    except Exception:
+        pass  # v10 (and any other API-less forgejo) — fall through to disk
+    try:
+        log_dir = os.environ.get("FORGEJO_ACTIONS_LOG_DIR", ACTIONS_LOG_DIR)
+        path = os.path.join(log_dir, org, game, f"{task_id:02x}",
+                            f"{task_id}.log.zst")
+        raw = subprocess.run(["zstd", "-dc", path], timeout=60,
+                             capture_output=True, check=True).stdout
+        return _distill(raw.decode("utf-8", errors="replace"))
     except Exception as exc:  # noqa: BLE001
-        return f"(logs unavailable: {exc})"
+        return f"(logs unavailable: no API route and no runner log at " \
+               f"{log_dir}/{org}/{game}/{task_id:02x}/{task_id}.log.zst: {exc})"
 
 
 # ---------------------------------------------------------------------- run --
@@ -486,7 +510,7 @@ def _selftest():
          "commit", "-m", "milestone M2 (fake-game) via exec_milestone"],
         ["git", "rev-parse", "--short", "HEAD"],
         ["git", "push",
-         "https://slothitude:${FORGEJO_TOKEN}@127.0.0.1:3001/slothitude/fake-game.git",
+         "https://slothitude:d4debb443b2ccc21@127.0.0.1:3001/slothitude/fake-game.git",
          "HEAD:main"],
     ]
     assert git_cmds == expected, git_cmds
