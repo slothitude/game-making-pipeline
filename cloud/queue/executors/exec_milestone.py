@@ -52,7 +52,7 @@ PI_BIN = "pi"
 # GMP_PI_MODEL pins one concrete free model (still openrouter, still free —
 # the workers law is about the lane, not the alias). Default unchanged.
 PI_MODEL = os.environ.get("GMP_PI_MODEL", "openrouter/free")
-PI_TIMEOUT = int(os.environ.get("PI_TIMEOUT", "3600"))         # a silent hang must cost minutes, not half an hour
+PI_TIMEOUT = 900         # a silent hang must cost minutes, not half an hour
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
@@ -313,6 +313,9 @@ def await_wall(game, sha, timeout=None):
     while _t.time() - start < timeout:
         try:
             tasks = _forgejo_get(f"{game}/actions/tasks")
+            if isinstance(tasks, dict):
+                # Forgejo wraps: {"workflow_runs": [...], "total_count": N}
+                tasks = tasks.get("workflow_runs") or tasks.get("entries") or []
             for t in tasks if isinstance(tasks, list) else []:
                 if str(t.get("head_sha", "")).startswith(sha):
                     st = t.get("status")
