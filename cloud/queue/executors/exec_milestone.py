@@ -52,7 +52,7 @@ PI_TIMEOUT = 1800        # milestone-depth build; the brain gets room
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
-FORGEJO_TOKEN = "d4debb443b2ccc21"  # basic-auth token; FORGEJO_TOKEN env overrides
+FORGEJO_TOKEN = os.environ["FORGEJO_TOKEN"]  # basic-auth push token; set in queue/env (no hardcoded secrets)
 PUSH_BRANCH = "main"     # the branch the Actions gate wall watches
 
 PROMPT_LAWS = """LAWS (never break):
