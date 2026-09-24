@@ -258,11 +258,18 @@ def git_ship(game_dir, game, selector):
     """add -> commit (inline identity, the Actions law) -> rev-parse -> push
     HEAD:<PUSH_BRANCH> at the Forgejo origin. Returns the short hash."""
     _git(game_dir, ["add", "-A"])
-    _git(game_dir, ["-c", "user.name=gmp-builder",
-                    "-c", "user.email=gmp-builder@pipeline.local",
-                    "commit", "-m", f"milestone {selector} ({game}) via exec_milestone"])
+    c = _git(game_dir, ["-c", "user.name=gmp-builder",
+                        "-c", "user.email=gmp-builder@pipeline.local",
+                        "commit", "-m", f"milestone {selector} ({game}) via exec_milestone"])
     rev = _git(game_dir, ["rev-parse", "--short", "HEAD"])
     commit = rev.stdout.strip()
+    if "nothing to commit" in (c.stdout or "") + (c.stderr or ""):
+        # Milestone already built and shipped (refire after a false fail, or
+        # pi validated without changing files). The wall state for HEAD
+        # carries — await_wall matches it instead of failing the job.
+        say(f"nothing to commit — milestone already shipped as {commit}; "
+            f"the wall verdict for it stands")
+        return commit
     url = forgejo_push_url(game)
     say(f"push {commit} -> {url.rsplit('@', 1)[-1]} HEAD:{PUSH_BRANCH} "
         f"(triggers the Actions gate wall)")
