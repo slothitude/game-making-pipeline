@@ -206,20 +206,29 @@ def run_pi(prompt, cwd, timeout=None):
     cmd = [PI_BIN, "--print", "--model", PI_MODEL, prompt]
     env = dict(os.environ)
     say(f"-> pi ({PI_MODEL}), cwd {cwd}, timeout {timeout}s, prompt {len(prompt)} chars")
+    # Own session + process-group kill: pi spawns grandchildren (godot test
+    # runs) that outlive a plain child kill and hang the next attempt's tree.
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, start_new_session=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True)
     try:
-        proc = subprocess.run(cmd, cwd=cwd, env=env, timeout=timeout,
-                              capture_output=True, text=True)
+        out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
-        partial = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"")
+        import signal
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        out, err = proc.communicate()
         raise RuntimeError(
             f"pi timed out after {timeout}s "
-            f"(partial output: {str(partial)[-300:]})") from exc
-    tail = ((proc.stdout or "") or (proc.stderr or "")).strip().splitlines()[-6:]
+            f"(partial output: {str(out or '')[-300:]})") from exc
+    tail = ((out or "") or (err or "")).strip().splitlines()[-6:]
     for line in tail:
         say(f"| {line}")
     if proc.returncode != 0:
         raise RuntimeError(
-            f"pi exit {proc.returncode}: {(proc.stderr or proc.stdout or '')[-400:].strip()}")
+            f"pi exit {proc.returncode}: {(err or out or '')[-400:].strip()}")
     return proc
 
 
