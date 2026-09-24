@@ -267,8 +267,7 @@ def git_ship(game_dir, game, selector):
         # Milestone already built and shipped (refire after a false fail, or
         # pi validated without changing files). The wall state for HEAD
         # carries — await_wall matches it instead of failing the job.
-        say(f"nothing to commit — milestone already shipped as {commit}; "
-            f"the wall verdict for it stands")
+        say(f"milestone already at HEAD {commit}, walling as-is")
         return commit
     url = forgejo_push_url(game)
     say(f"push {commit} -> {url.rsplit('@', 1)[-1]} HEAD:{PUSH_BRANCH} "
