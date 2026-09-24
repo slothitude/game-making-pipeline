@@ -289,10 +289,13 @@ def _forgejo_get(path, timeout=20):
         return json.loads(resp.read().decode())
 
 
-def await_wall(game, sha, timeout=900):
+def await_wall(game, sha, timeout=None):
     """Poll Actions for the run on `sha`. -> (status, task_id); status may be
     success | failure | None (no run seen in time — never loop on that)."""
     import time as _t
+    # M4-scale walls (import + full battery 2x + replays) do not fit 900s —
+    # they died as no-run-seen. Generous default, WALL_TIMEOUT overrides.
+    timeout = timeout or int(os.environ.get("WALL_TIMEOUT", "3600"))
     start = _t.time()
     while _t.time() - start < timeout:
         try:
