@@ -29,6 +29,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time as _time
 import urllib.request
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -120,8 +121,24 @@ def _ensure_web_templates(godot=None):
 
 
 # -------------------------------------------------------------------- export --
+def _artifacts_ready(out_path, started):
+    """True when the export's output exists AND is fresh (godot 4.7 headless
+    sometimes finishes the build and then will not exit — the artifact is the
+    truth, the process is not)."""
+    pck = out_path[:-5] + ".pck" if out_path.endswith(".html") else out_path
+    for path in (out_path, pck):
+        if not (os.path.isfile(path) and os.path.getmtime(path) >= started - 5):
+            return False
+    return True
+
+
 def export(game_dir, preset, out_rel):
-    """godot --headless --export-release. Returns the absolute build dir."""
+    """godot --headless --export-release. Returns the absolute build dir.
+
+    The target folder is created first (godot does not mkdir it — a missing
+    folder is a failed export). If godot finishes the build but will not exit
+    (observed on the loaded server: build DONE, process idles), the fresh
+    artifacts end the wait and the lingering process is terminated."""
     _ensure_web_templates()
     out_path = os.path.join(game_dir, out_rel).replace(os.sep, "/")
     parent = os.path.dirname(out_path)
@@ -131,24 +148,51 @@ def export(game_dir, preset, out_rel):
     cmd = [godot, "--headless", "--path", game_dir,
            "--export-release", preset, out_path]
     say(f"export: {os.path.basename(godot)} preset={preset!r} -> {out_rel}")
-    try:
-        proc = module_subprocess.run(cmd, timeout=EXPORT_TIMEOUT,
-                                     capture_output=True, text=True, cwd=game_dir)
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"godot export timed out after {EXPORT_TIMEOUT}s "
-            f"({str(exc.stdout or '')[-200:]})") from exc
-    tail = ((proc.stdout or "") + (proc.stderr or "")).strip().splitlines()[-5:]
+    started = _time.time()
+    # output goes to a temp file, not a pipe: godot writes a lot, and an
+    # unread pipe fills and stalls the export itself
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8",
+                                errors="replace") as log:
+        proc = module_subprocess.Popen(cmd, cwd=game_dir, stdout=log,
+                                       stderr=subprocess.STDOUT)
+        settled = None
+        deadline = started + EXPORT_TIMEOUT
+        while _time.time() < deadline:
+            if proc.poll() is not None:
+                break
+            if _artifacts_ready(out_path, started):
+                if settled is None:
+                    settled = os.path.getsize(out_path)
+                    say("export output written — confirming it is settled")
+                elif settled == os.path.getsize(out_path):
+                    say("build settled but godot did not exit — terminating it")
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    break
+                else:
+                    settled = os.path.getsize(out_path)
+            _time.sleep(10)
+        else:
+            proc.kill()
+            raise RuntimeError(
+                f"godot export timed out after {EXPORT_TIMEOUT}s "
+                f"(no settled build at {out_path})")
+        log.seek(0)
+        out = log.read()
+    tail = out.strip().splitlines()[-5:]
     for line in tail:
         say(f"| {line}")
-    if proc.returncode != 0:
+    rc = proc.returncode
+    if rc not in (0, None) and not _artifacts_ready(out_path, started):
         raise RuntimeError(
-            f"godot export rc={proc.returncode} for preset {preset!r}: "
-            f"{((proc.stderr or '') or (proc.stdout or ''))[-400:].strip()}")
+            f"godot export rc={rc} for preset {preset!r}: {out[-400:].strip()}")
     if not os.path.isfile(out_path):
         raise RuntimeError(
-            f"godot export reported rc=0 but {out_path} does not exist")
-    return os.path.dirname(out_path) or game_dir
+            f"godot export ended rc={rc} but {out_path} does not exist")
+    return parent or game_dir
 
 
 def rsync_command(src, dest, dry_run):
@@ -242,19 +286,30 @@ def _selftest():
 
     recorded = []
 
-    def recorder(cmd, **kwargs):
+    class FakePopen:
+        """The godot call: writes the build, exits immediately."""
+
+        def __init__(self, cmd, **kwargs):
+            recorded.append({"cmd": list(cmd), "kwargs": kwargs})
+            out_rel = cmd[-1]
+            build = os.path.dirname(out_rel)
+            os.makedirs(build, exist_ok=True)
+            for name, body in (("index.html", "<html>moon-ladder</html>"),
+                               ("index.js", "// loader"), ("index.pck", "bin")):
+                with open(os.path.join(build, name), "w",
+                          encoding="utf-8") as fh:
+                    fh.write(body)
+            # a stale leftover the --delete must be credited with removing
+            with open(os.path.join(build, "stale-leftover.txt"), "w",
+                      encoding="utf-8") as fh:
+                fh.write("old")
+            self.returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+    def fake_rsync(cmd, **kwargs):
         recorded.append({"cmd": list(cmd), "kwargs": kwargs})
-        out_rel = cmd[-1]
-        build = os.path.dirname(out_rel)
-        os.makedirs(build, exist_ok=True)
-        for name, body in (("index.html", "<html>moon-ladder</html>"),
-                           ("index.js", "// loader"), ("index.pck", "bin")):
-            with open(os.path.join(build, name), "w", encoding="utf-8") as fh:
-                fh.write(body)
-        # a stale leftover the --delete must be credited with removing
-        with open(os.path.join(build, "stale-leftover.txt"), "w",
-                  encoding="utf-8") as fh:
-            fh.write("old")
         return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
 
     # pretend the templates are installed so the download path stays cold —
@@ -264,9 +319,11 @@ def _selftest():
     with open(os.path.join(tdir, "web_release.zip"), "w", encoding="utf-8") as fh:
         fh.write("PK")
 
-    real_run, real_url, real_tpl = (module_subprocess.run, module_urlopen,
-                                    os.environ.get("GMP_GODOT_TEMPLATES"))
-    module_subprocess.run = recorder
+    real_run, real_popen = module_subprocess.run, module_subprocess.Popen
+    real_url, real_tpl = (module_urlopen,
+                          os.environ.get("GMP_GODOT_TEMPLATES"))
+    module_subprocess.Popen = FakePopen
+    module_subprocess.run = fake_rsync
     module_urlopen = lambda *a, **k: (_ for _ in ()).throw(AssertionError(
         "selftest must not download templates"))
     os.environ["GMP_GODOT_TEMPLATES"] = tdir
@@ -274,11 +331,8 @@ def _selftest():
         result = run({"id": "selftest", "payload": {
             "game": "moon-ladder", "target": "retromonkey"}})
     finally:
-        module_subprocess.run, module_urlopen = real_run, real_url
-        if real_tpl is None:
-            os.environ.pop("GMP_GODOT_TEMPLATES", None)
-        else:
-            os.environ["GMP_GODOT_TEMPLATES"] = real_tpl
+        module_subprocess.run = real_run
+        module_urlopen = real_url
 
     godot_cmd, rsync_cmd = recorded[0]["cmd"], recorded[1]["cmd"]
     assert godot_cmd[-3:-1] == ["--export-release", "Web"], godot_cmd
@@ -316,6 +370,50 @@ def _selftest():
         say("selftest: no-Web-preset -> RuntimeError listing what was there")
     else:
         raise AssertionError("missing Web preset must raise")
+
+    # --- 5. godot finishes the build then will not exit ----------------------
+    # (observed on the loaded server: build DONE, process idles) — the fresh
+    # artifacts must end the wait, terminate the straggler, and still ship.
+    with open(os.path.join(game_dir, "export_presets.cfg"), "w",
+              encoding="utf-8") as fh:
+        fh.write('[preset.0]\n\nname="Web"\nplatform="Web"\n'
+                 'export_path="build/web/index.html"\n')
+
+    class StubbornPopen(FakePopen):
+        """Writes the build but poll() never says yes until terminated."""
+
+        def __init__(self, cmd, **kwargs):
+            FakePopen.__init__(self, cmd, **kwargs)
+            self.returncode = None
+            self.terminated = False
+
+        def poll(self):
+            return None if not self.terminated else 0
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self, timeout=None):
+            return 0
+
+    module_subprocess.Popen = StubbornPopen
+    module_subprocess.run = fake_rsync   # rsync must not meet StubbornPopen
+    real_sleep = _time.sleep
+    _time.sleep = lambda *_: None     # the watchdog's settle wait
+    try:
+        result = run({"id": "selftest-hang", "payload": {
+            "game": "moon-ladder", "target": "retromonkey"}})
+    finally:
+        _time.sleep = real_sleep
+        module_subprocess.Popen, module_subprocess.run = real_popen, real_run
+        module_urlopen = real_url
+        if real_tpl is None:
+            os.environ.pop("GMP_GODOT_TEMPLATES", None)
+        else:
+            os.environ["GMP_GODOT_TEMPLATES"] = real_tpl
+    assert result["ok"] and result["build_dir"].endswith("build/web"), result
+    say("selftest 5: build settles + godot idles -> artifacts win, straggler "
+        "terminated, deploy still ships")
     say("selftest: PASS")
     return 0
 
