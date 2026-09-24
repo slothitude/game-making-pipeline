@@ -1,6 +1,6 @@
 {
-  "player": {"sub_player": 64},
-  "threats": {"creature_drifter": 56},
+  "player": {"sub_player": 70},
+  "threats": {"creature_drifter": 65},
   "items": {"wreck_beacon": 64},
-  "note": "roles from scripts/sub.gd (sub_player = the player sub), creature.gd (roamers = threats), wreck beacons = collectables. creature_lurker EXCLUDED: its generated png is an opaque solid-black square (flat_std=0) - no NCC information, and the matcher skips such art by the MIN_TEMPLATE_STD law. No feel.gd px constants in sonar - sizes estimated, calibrate from live captures."
+  "note": "roles from scripts/sub.gd (sub_player = the player sub), creature.gd (roamers = threats), wreck beacons = collectables. creature_lurker EXCLUDED: its generated png is an opaque solid-black square (flat_std=0) - no NCC information, and the matcher skips such art by the MIN_TEMPLATE_STD law. Sizes calibrated off live capture evidence/perception/sonar/frames/010.jpg (sub ~75x70 at (190,234); drifter jelly ~53x65, conf 0.96 with the frame-median composite vs 0.66 at the old 56 estimate). Sonar's sea sits at median luma ~40 - the BG_BIN frame-median composite is what makes this game matchable."
 }

@@ -1,6 +1,6 @@
 {
-  "player": {"hero_idle": 56},
-  "threats": {"enemy_agent": 60},
-  "items": {"bullet": 36},
-  "note": "roles from scripts/player.gd + feel.gd TEX_HERO/TEX_ENEMY_AGENT; bullet = weapon.gd projectile. Sizes estimated (feel.gd draws via make_sprite target_size) - calibrate from live captures. explosion/title_logo ignored."
+  "player": {"hero_idle": [20, 28]},
+  "threats": {"enemy_agent": [19, 27]},
+  "items": {},
+  "note": "roles from scripts/player.gd (hero = the player alien 'star visitor') + enemy agents; bullet DROPPED: on-screen it is ~11x5 px, below reliable NCC at the 0.75 law (12px templates fired sub-threshold noise). Sizes calibrated off live capture evidence/perception/star-visitor/frames/001-012.jpg with a per-px w/h grid: the game draws hero_idle non-uniformly at 20x28 (mean conf 0.87 alive frames; the art's aspect gives 18x28 = 0.75 - two px of width is ~0.2 NCC at this scale), enemy_agent 19x27 (mean 0.70, sub-threshold - the agents also animate walk frames; reported honestly as a partial lane). explosion/title_logo ignored."
 }
