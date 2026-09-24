@@ -1,0 +1,46 @@
+{
+  "game": "default",
+  "url": "https://retromonkey.com.au/games/{game}/",
+  "source": "profiles/default.json",
+  "viewport": [540, 960],
+  "input_classes": ["touch", "key", "pad"],
+  "notes": "Default profile for UNKNOWN games: taps + arrows + wasd. Coordinates marked rel:true are fractions of the live viewport and resolve in from_intent() against ctx viewport. Absolute coords are in this profile's viewport and get rescaled when the live viewport differs.",
+  "touch_zones": {
+    "centre": [0.5, 0.5],
+    "lower_centre": [0.5, 0.72],
+    "left_half": [0.25, 0.5],
+    "right_half": [0.75, 0.5]
+  },
+  "keys": {
+    "left": ["ArrowLeft", "a"],
+    "right": ["ArrowRight", "d"],
+    "up": ["ArrowUp", "w"],
+    "down": ["ArrowDown", "s"],
+    "action": ["Space", "z"]
+  },
+  "intents": {
+    "start": {"gesture": "combo", "args": {"children": [
+      {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+      {"gesture": "tap", "args": {"x": 0.5, "y": 0.5, "rel": true}}]}},
+    "confirm": {"gesture": "tap", "args": {"x": 0.5, "y": 0.5, "rel": true}},
+    "retry": {"gesture": "combo", "args": {"children": [
+      {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+      {"gesture": "tap", "args": {"x": 0.5, "y": 0.5, "rel": true}}]}},
+    "fire": {"gesture": "key", "args": {"name": "z", "down_ms": 120}},
+    "jump": {"gesture": "key", "args": {"name": "x", "down_ms": 120}},
+    "advance": {"gesture": "key", "args": {"name": "ArrowRight", "down_ms": 400}},
+    "retreat": {"gesture": "key", "args": {"name": "ArrowLeft", "down_ms": 400}},
+    "up": {"gesture": "key", "args": {"name": "ArrowUp", "down_ms": 200}},
+    "down": {"gesture": "key", "args": {"name": "ArrowDown", "down_ms": 200}},
+    "left": {"gesture": "key", "args": {"name": "ArrowLeft", "down_ms": 200}},
+    "right": {"gesture": "key", "args": {"name": "ArrowRight", "down_ms": 200}},
+    "dodge_left": {"gesture": "swipe", "args": {"x1": 0.62, "y1": 0.5, "x2": 0.2, "y2": 0.5, "dur_ms": 220, "steps": 8, "rel": true}},
+    "dodge_right": {"gesture": "swipe", "args": {"x1": 0.38, "y1": 0.5, "x2": 0.8, "y2": 0.5, "dur_ms": 220, "steps": 8, "rel": true}},
+    "dodge_up": {"gesture": "swipe", "args": {"x1": 0.5, "y1": 0.65, "x2": 0.5, "y2": 0.25, "dur_ms": 220, "steps": 8, "rel": true}},
+    "dodge_down": {"gesture": "swipe", "args": {"x1": 0.5, "y1": 0.35, "x2": 0.5, "y2": 0.75, "dur_ms": 220, "steps": 8, "rel": true}},
+    "pad_confirm": {"gesture": "pad", "args": {"button": 0, "pressed": true}},
+    "stick_left": {"gesture": "stick", "args": {"idx": 0, "x": -1.0, "y": 0.0}},
+    "stick_right": {"gesture": "stick", "args": {"idx": 0, "x": 1.0, "y": 0.0}},
+    "stick_neutral": {"gesture": "stick", "args": {"idx": 0, "x": 0.0, "y": 0.0}}
+  }
+}

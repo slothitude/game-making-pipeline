@@ -1,0 +1,37 @@
+{
+  "game": "cubefall",
+  "url": "https://retromonkey.com.au/games/cubefall/",
+  "source": "games-src/cubefall (scripts/main.gd _unhandled_input + _key_steps, drag_stepper.gd, project.godot)",
+  "viewport": [540, 960],
+  "input_classes": ["touch", "key"],
+  "controls": {
+    "touch": "one continuous drag language: InputEventScreenTouch pressed -> stepper.drag_begin(x,y) and a tap detector (Feel.TAP_SLOP_PX / TAP_MAX_SEC); InputEventScreenDrag -> stepper.drag_move. A short tap and a drag are therefore different moves of the same gesture",
+    "keys": "WASD + arrows (Input.is_physical_key_pressed with hold-repeat in _key_steps): w/up roll up, s/down roll down, a/left roll left, d/right roll right",
+    "gyro": "none"
+  },
+  "touch_zones": {
+    "centre": [270, 480],
+    "marker": [270, 500],
+    "start_tap": [270, 480]
+  },
+  "keys_map": {"up": "w|ArrowUp", "down": "s|ArrowDown", "left": "a|ArrowLeft", "right": "d|ArrowRight"},
+  "intents": {
+    "start": {"gesture": "combo", "args": {"children": [
+      {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+      {"gesture": "tap", "args": {"x": 270, "y": 480}}]}},
+    "confirm": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "retry": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "dodge_left": {"gesture": "key", "args": {"name": "a", "down_ms": 300}},
+    "dodge_right": {"gesture": "key", "args": {"name": "d", "down_ms": 300}},
+    "dodge_up": {"gesture": "key", "args": {"name": "w", "down_ms": 300}},
+    "dodge_down": {"gesture": "key", "args": {"name": "s", "down_ms": 300}},
+    "left": {"gesture": "key", "args": {"name": "a", "down_ms": 250}},
+    "right": {"gesture": "key", "args": {"name": "d", "down_ms": 250}},
+    "up": {"gesture": "key", "args": {"name": "w", "down_ms": 250}},
+    "down": {"gesture": "key", "args": {"name": "s", "down_ms": 250}},
+    "advance": {"gesture": "key", "args": {"name": "d", "down_ms": 400}},
+    "retreat": {"gesture": "key", "args": {"name": "a", "down_ms": 400}},
+    "drag_left": {"gesture": "swipe", "args": {"x1": 380, "y1": 700, "x2": 140, "y2": 700, "dur_ms": 260, "steps": 8}},
+    "drag_right": {"gesture": "swipe", "args": {"x1": 140, "y1": 700, "x2": 380, "y2": 700, "dur_ms": 260, "steps": 8}}
+  }
+}

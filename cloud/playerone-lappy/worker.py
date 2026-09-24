@@ -31,6 +31,11 @@ a wedged browser, an OOM, or a flaky ladder can never take the daemon down.
 A runner that dies reports {"error": ...} — the queue's retry law requeues
 it once, then fails it honestly.
 
+INPUT: the lanes act on the games through input_bridge.py when P1_INPUT=bridge
+is set on this service — CDP touch events, a deviceorientation override, and a
+synthetic gamepad (see input_bridge.py's header). Without the flag the lanes
+keep the legacy desktop mouse/keyboard path untouched.
+
 Selftest (offline: no venv, no network, no browser — mocks the claim POST,
 the subprocesses, and points ROOT at a temp tree with a fake evidence dir):
 
@@ -161,6 +166,24 @@ def claim_job() -> dict | None:
     return _post_json("/jobs/claim", {"types": CLAIM_TYPES}).get("job")
 
 
+def lane_env() -> dict | None:
+    """Env for the lane children, or None for "inherit mine".
+
+    P1_INPUT=bridge is the actuator flag: the lanes' taps/drags/keys route
+    through input_bridge.py (CDP touch, deviceorientation, the gamepad shim)
+    instead of the desktop mouse/keyboard lane. The flag is forwarded and ROOT
+    goes on PYTHONPATH so `import input_bridge` resolves beside worker.py.
+    Flag absent -> None -> the legacy env, byte-identical."""
+    if os.environ.get("P1_INPUT", "").strip().lower() != "bridge":
+        return None
+    env = dict(os.environ)
+    env["P1_INPUT"] = "bridge"
+    parts = [str(ROOT)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+    say("input bridge ON — lanes act through input_bridge.py (touch/gyro/pad)")
+    return env
+
+
 def post_result(job_id, result=None, error=None, permanent: bool = False) -> dict:
     if error is None:
         body: dict = {"result": result}
@@ -283,6 +306,43 @@ def evidence_dir(game: str) -> Path:
     return ROOT / "evidence" / game
 
 
+def run_perception(game: str, max_frames: int = 12) -> dict:
+    """P1_EYES=templates — perception.py over the feed's newest screenshots.
+
+    The eyes v1: OpenCV template matching against the game's own sprites.
+    A perception failure is a missing sense, not a failed job: the error is
+    reported in the payload and the lane carries on without it.
+    """
+    try:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        import cv2  # lazy: the legacy path never pays for opencv
+        from perception import perceive
+
+        frames = sorted(evidence_dir(game).rglob("*.png"))[-max_frames:]
+        if not frames:
+            return {"error": f"no .png under {evidence_dir(game)}"}
+        stream, found, ms = [], 0, 0.0
+        for path in frames:
+            img = cv2.imread(str(path))
+            if img is None:
+                continue
+            state = perceive(img, game)
+            ms += state["ms"]
+            if state["player"]:
+                found += 1
+            stream.append({"frame": path.name, "t": state["t"],
+                           "player": state["player"],
+                           "threats": state["threats"],
+                           "items": state["items"]})
+        return {"lane": "templates", "frames": len(stream),
+                "player_found_share": round(found / len(stream), 3) if stream else 0.0,
+                "mean_ms": round(ms / len(stream), 2) if stream else 0.0,
+                "stream": stream}
+    except Exception as exc:  # noqa: BLE001 — eyes degrade, the lane survives
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def newest_screenshot(game: str) -> str | None:
     """Newest *.png under evidence/<game>/ — the frame vision_critic sees."""
     root = evidence_dir(game)
@@ -302,7 +362,7 @@ def run_collector(game: str, seconds: float, url: str | None = None) -> dict:
     if url:
         cmd += ["--url", url]
     timeout = seconds * 3 + 240   # goto(60s) + boot settle + cadence slack
-    proc = _subprocess(cmd, timeout=timeout, cwd=str(ROOT))
+    proc = _subprocess(cmd, timeout=timeout, cwd=str(ROOT), env=lane_env())
     if proc.stopped:
         raise RuntimeError("evidence feed interrupted by shutdown")
     if proc.timed_out:
@@ -437,13 +497,22 @@ def runner_feed(job: dict, lane: str) -> dict:
     if lane == "emulator":
         report["note"] = ("lappy has no AVD — the playwright chromium feed "
                           "is the emulator lane's stand-in (observation only)")
-    return {"ok": True, "lane": lane, "game": game, "seconds": seconds,
-            "shots": report.get("shots"),
-            "survival_seconds": report.get("survival_seconds"),
-            "actions_taken": report.get("actions_taken"),
-            "events": (report.get("events") or [])[:10],
-            "evidence_dir": str(evidence_dir(game)),
-            "report": report}
+    result = {"ok": True, "lane": lane, "game": game, "seconds": seconds,
+              "shots": report.get("shots"),
+              "survival_seconds": report.get("survival_seconds"),
+              "actions_taken": report.get("actions_taken"),
+              "events": (report.get("events") or [])[:10],
+              "evidence_dir": str(evidence_dir(game)),
+              "report": report}
+    if os.environ.get("P1_EYES") == "templates":
+        eyes = run_perception(game)
+        say(f"id={job.get('id')} perception: "
+            f"{eyes.get('frames', 0)} frames, "
+            f"player_found={eyes.get('player_found_share', 0):.0%}"
+            if not eyes.get("error") else
+            f"id={job.get('id')} perception unavailable: {eyes['error']}")
+        result["perception"] = eyes
+    return result
 
 
 # --------------------------------------------------------- the selfplay lane --
@@ -497,7 +566,7 @@ def runner_selfplay(job: dict) -> dict:
     timeout = sessions * (boot + decisions * 6) + 600
     say(f"id={job.get('id')} selfplay game={game} brain={brain.name} "
         f"sessions={sessions} decisions={decisions}")
-    proc = _subprocess(cmd, timeout=timeout, cwd=str(ROOT))
+    proc = _subprocess(cmd, timeout=timeout, cwd=str(ROOT), env=lane_env())
     if proc.stopped:
         raise RuntimeError("selfplay interrupted by shutdown")
     if proc.timed_out:

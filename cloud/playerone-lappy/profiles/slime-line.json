@@ -1,0 +1,35 @@
+{
+  "game": "slime-line",
+  "url": "https://retromonkey.com.au/games/slime-line/",
+  "source": "games-src/slime-line (scripts/slug.gd, tilt_source.gd, title.gd, game_over.gd, project.godot)",
+  "viewport": [540, 960],
+  "input_classes": ["touch", "gyro"],
+  "controls": {
+    "touch": "drag anywhere — slug.gd defaults tilt_x/tilt_y to TiltSource MODE_TOUCH: the drag delta (TOUCH_DRAG_RANGE_PX) steers the slug on both axes; a tap on the title screen starts, a tap anywhere off the sound button restarts from game over (InputEventScreenTouch OR InputEventMouseButton)",
+    "keys": "none bound — this game has no InputEventKey handling, so the keyboard lane is a no-op here",
+    "gyro": "MODE_DEVICE is available via set_input_mode but the slug boots in MODE_TOUCH; Godot's web export never reads deviceorientation, so tilt is a dead lane on web"
+  },
+  "touch_zones": {
+    "centre": [270, 480],
+    "drag_anchor": [270, 620],
+    "title_tap": [270, 480],
+    "retry_tap": [270, 480]
+  },
+  "keys_map": {},
+  "intents": {
+    "start": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "confirm": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "retry": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "dodge_left": {"gesture": "swipe", "args": {"x1": 380, "y1": 620, "x2": 160, "y2": 620, "dur_ms": 240, "steps": 8}},
+    "dodge_right": {"gesture": "swipe", "args": {"x1": 160, "y1": 620, "x2": 380, "y2": 620, "dur_ms": 240, "steps": 8}},
+    "dodge_up": {"gesture": "swipe", "args": {"x1": 270, "y1": 700, "x2": 270, "y2": 420, "dur_ms": 240, "steps": 8}},
+    "dodge_down": {"gesture": "swipe", "args": {"x1": 270, "y1": 420, "x2": 270, "y2": 700, "dur_ms": 240, "steps": 8}},
+    "left": {"gesture": "swipe", "args": {"x1": 380, "y1": 620, "x2": 160, "y2": 620, "dur_ms": 240, "steps": 8}},
+    "right": {"gesture": "swipe", "args": {"x1": 160, "y1": 620, "x2": 380, "y2": 620, "dur_ms": 240, "steps": 8}},
+    "up": {"gesture": "swipe", "args": {"x1": 270, "y1": 700, "x2": 270, "y2": 420, "dur_ms": 240, "steps": 8}},
+    "down": {"gesture": "swipe", "args": {"x1": 270, "y1": 420, "x2": 270, "y2": 700, "dur_ms": 240, "steps": 8}},
+    "advance": {"gesture": "swipe", "args": {"x1": 160, "y1": 620, "x2": 380, "y2": 620, "dur_ms": 300, "steps": 8}},
+    "retreat": {"gesture": "swipe", "args": {"x1": 380, "y1": 620, "x2": 160, "y2": 620, "dur_ms": 300, "steps": 8}},
+    "salt": {"gesture": "tap", "args": {"x": 270, "y": 300}}
+  }
+}

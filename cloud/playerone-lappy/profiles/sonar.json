@@ -1,0 +1,47 @@
+{
+  "game": "sonar",
+  "url": "https://retromonkey.com.au/games/sonar/",
+  "source": "games-src/sonar (scripts/sub.gd, tilt_source.gd, main.gd, project.godot input map)",
+  "viewport": [540, 960],
+  "input_classes": ["touch", "key", "gyro"],
+  "controls": {
+    "touch": "drag anywhere steers — TiltSource MODE_TOUCH is the hard-coded web default (sub.gd _ready): horizontal drag = turn, vertical drag = rise/dive (TOUCH_DRAG_RANGE_PX scale)",
+    "keys": {
+      "Space": "the 'sonar' action — ping, and restart from the game-over overlay",
+      "w / ArrowUp": "move_up",
+      "s / ArrowDown": "move_down",
+      "a / ArrowLeft": "move_left",
+      "d / ArrowRight": "move_right"
+    },
+    "gyro": "MODE_DEVICE exists but is mobile-only (OS.has_feature('mobile'/'android'/'ios')); Godot's web export has no deviceorientation hook, so a tilt override provably reaches the page as an event and the game never reads it — steer by touch drag on web"
+  },
+  "touch_zones": {
+    "centre": [270, 480],
+    "steer_anchor_left": [90, 480],
+    "steer_anchor_right": [450, 480],
+    "start_tap": [270, 430]
+  },
+  "keys_map": {"sonar": "Space", "move_up": "w|ArrowUp", "move_down": "s|ArrowDown", "move_left": "a|ArrowLeft", "move_right": "d|ArrowRight"},
+  "intents": {
+    "start": {"gesture": "combo", "args": {"children": [
+      {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+      {"gesture": "tap", "args": {"x": 270, "y": 430}},
+      {"gesture": "tap", "args": {"x": 270, "y": 460}}]}},
+    "confirm": {"gesture": "tap", "args": {"x": 270, "y": 430}},
+    "retry": {"gesture": "key", "args": {"name": "Space", "down_ms": 100}},
+    "fire": {"gesture": "key", "args": {"name": "Space", "down_ms": 120}},
+    "ping": {"gesture": "key", "args": {"name": "Space", "down_ms": 120}},
+    "dodge_left": {"gesture": "swipe", "args": {"x1": 400, "y1": 480, "x2": 80, "y2": 480, "dur_ms": 240, "steps": 8}},
+    "dodge_right": {"gesture": "swipe", "args": {"x1": 140, "y1": 480, "x2": 460, "y2": 480, "dur_ms": 240, "steps": 8}},
+    "dodge_up": {"gesture": "swipe", "args": {"x1": 270, "y1": 640, "x2": 270, "y2": 320, "dur_ms": 240, "steps": 8}},
+    "dodge_down": {"gesture": "swipe", "args": {"x1": 270, "y1": 320, "x2": 270, "y2": 640, "dur_ms": 240, "steps": 8}},
+    "rise": {"gesture": "key", "args": {"name": "w", "down_ms": 300}},
+    "dive": {"gesture": "key", "args": {"name": "s", "down_ms": 300}},
+    "left": {"gesture": "key", "args": {"name": "a", "down_ms": 250}},
+    "right": {"gesture": "key", "args": {"name": "d", "down_ms": 250}},
+    "advance": {"gesture": "key", "args": {"name": "d", "down_ms": 400}},
+    "retreat": {"gesture": "key", "args": {"name": "a", "down_ms": 400}},
+    "up": {"gesture": "key", "args": {"name": "w", "down_ms": 250}},
+    "down": {"gesture": "key", "args": {"name": "s", "down_ms": 250}}
+  }
+}

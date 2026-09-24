@@ -1,0 +1,40 @@
+{
+  "game": "octogram-arcade",
+  "url": "https://retromonkey.com.au/games/octogram-arcade/",
+  "source": "games-src/octogram-arcade (scripts/main.gd, battle_ui.gd, project.godot [input])",
+  "viewport": [720, 1280],
+  "input_classes": ["key", "touch"],
+  "controls": {
+    "keys": {
+      "a-z / A-Z": "typed straight into the word board — main.gd/battle_ui.gd read InputEventKey.unicode (65..90 / 97..122) and _append_letter(char(unicode))",
+      "Enter (4194309)": "submit",
+      "Backspace (4194308)": "remove_last",
+      "Escape (4194305)": "clear",
+      "Space (32)": "shuffle",
+      "F12 / backquote": "debug_toggle"
+    },
+    "touch": "the menus and battle UI are Button/Control scenes (circle_button.gd) — taps work for navigation; the word board itself is keyboard-only",
+    "gyro": "none"
+  },
+  "touch_zones": {
+    "centre": [360, 640],
+    "board": [360, 640]
+  },
+  "keys_map": {"submit": "Enter", "clear": "Escape", "shuffle": "Space", "remove_last": "Backspace", "letters": "a-z (unicode route, not an action)"},
+  "intents": {
+    "start": {"gesture": "tap", "args": {"x": 360, "y": 640}},
+    "confirm": {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+    "submit": {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+    "retry": {"gesture": "key", "args": {"name": "Enter", "down_ms": 100}},
+    "clear": {"gesture": "key", "args": {"name": "Escape", "down_ms": 80}},
+    "shuffle": {"gesture": "key", "args": {"name": "Space", "down_ms": 80}},
+    "remove_last": {"gesture": "key", "args": {"name": "Backspace", "down_ms": 80}},
+    "fire": {"gesture": "key", "args": {"name": "Enter", "down_ms": 80}},
+    "dodge_left": {"gesture": "key", "args": {"name": "ArrowLeft", "down_ms": 200}},
+    "dodge_right": {"gesture": "key", "args": {"name": "ArrowRight", "down_ms": 200}},
+    "left": {"gesture": "key", "args": {"name": "ArrowLeft", "down_ms": 200}},
+    "right": {"gesture": "key", "args": {"name": "ArrowRight", "down_ms": 200}},
+    "up": {"gesture": "key", "args": {"name": "ArrowUp", "down_ms": 200}},
+    "down": {"gesture": "key", "args": {"name": "ArrowDown", "down_ms": 200}}
+  }
+}

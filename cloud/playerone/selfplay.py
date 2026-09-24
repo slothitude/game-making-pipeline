@@ -22,6 +22,13 @@ evolve.sh reads.
 
     cd /home/ubuntu/playerone && venv/bin/python cloud/playerone/selfplay.py \
         --game sonar --sessions 3 --brain runs/sonar-evolve-<stamp>.npz
+
+INPUT: with P1_INPUT=bridge in the environment (worker.py forwards the flag)
+every action this recorder sends goes through input_bridge.py — CDP touch
+events, a deviceorientation override, a synthetic gamepad — so Godot web
+builds see real InputEventScreenTouch/Drag instead of synthesized mouse. The
+context is also built with has_touch. Flag absent: the legacy mouse/keyboard
+path, byte-identical.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ import argparse
 import importlib
 import importlib.util
 import json
+import os
 import random
 import re
 import sys
@@ -46,6 +54,10 @@ SETTLE_SECONDS = 1.0
 VIEWPORT = (480, 800)
 BOOT_SECONDS = 420.0    # loader-overlay wait (cold wasm cache law)
 RESTART_BUDGET = 40     # bounded start-routine re-entries per session
+
+# P1_INPUT=bridge -> act through input_bridge.py (see the header note). The
+# legacy mouse/keyboard lane stays when the flag is absent.
+INPUT_BRIDGE = os.environ.get("P1_INPUT", "").strip().lower() == "bridge"
 
 GAMES = {
     "sonar":  {"module": "sonar_playthrough",
@@ -78,6 +90,19 @@ def log(payload: dict) -> None:
 
 
 # -- session surface ----------------------------------------------------------
+
+def _bridge_surface(session) -> None:
+    """Instance-level input override for the CanvasSession path (P1_INPUT=bridge
+    only): same tap/drag/press signatures the deployed playthrough modules
+    already call, the transport underneath becomes input_bridge. The class is
+    deployed code and stays untouched — duck typing, not a rewrite."""
+    from input_bridge import Bridge
+    bridge = Bridge(session.page).install()
+    session._input_bridge = bridge
+    session.tap = lambda x, y: bridge.tap(x, y)
+    session.drag = lambda x1, y1, x2, y2, steps=10, hold_ms=120: bridge.swipe(
+        x1, y1, x2, y2, dur_ms=max(200, int(hold_ms) * 2), steps=steps)
+    session.press = lambda key: bridge.key(key, 60)
 
 class MinimalSession:
     """The CanvasSession duck type view_of / start_* / run need, over one
@@ -116,11 +141,33 @@ class MinimalSession:
     def pause(self, ms: int = 500) -> None:
         self.page.wait_for_timeout(ms)
 
+    def _bridge(self):
+        """The input_bridge actuator, lazily (P1_INPUT=bridge only). None means
+        "legacy lane": the caller falls through to page.mouse/page.keyboard."""
+        if not INPUT_BRIDGE:
+            return None
+        bridge = getattr(self, "_input_bridge", None)
+        if bridge is None:
+            from input_bridge import Bridge
+            bridge = Bridge(self.page).install()
+            self._input_bridge = bridge
+        return bridge
+
     def tap(self, x: int, y: int) -> None:
+        bridge = self._bridge()
+        if bridge is not None:
+            bridge.tap(x, y)
+            return
         self.page.mouse.click(x, y)
 
     def drag(self, x1: int, y1: int, x2: int, y2: int,
              steps: int = 10, hold_ms: int = 120) -> None:
+        bridge = self._bridge()
+        if bridge is not None:
+            # a real touch drag: touchStart -> interpolated touchMove -> touchEnd
+            bridge.swipe(x1, y1, x2, y2, dur_ms=max(200, int(hold_ms) * 2),
+                         steps=steps)
+            return
         self.page.mouse.move(x1, y1)
         self.page.mouse.down()
         self.page.wait_for_timeout(hold_ms)
@@ -129,6 +176,10 @@ class MinimalSession:
         self.page.mouse.up()
 
     def press(self, key: str) -> None:
+        bridge = self._bridge()
+        if bridge is not None:
+            bridge.key(key, 60)
+            return
         self.page.keyboard.press(key)
 
     def execute(self, action: str, centre: tuple[int, int] = (240, 430),
@@ -188,9 +239,13 @@ def open_session(game: str, url: str, profile: Path,
     profile.mkdir(parents=True, exist_ok=True)
     pw = sync_playwright().start()
     try:
+        # has_touch only under the bridge flag: a context without it never
+        # emits real touch events, and Godot's web port then sees nothing.
+        touch_kwargs = {"has_touch": True, "is_mobile": True} if INPUT_BRIDGE else {}
         context = pw.chromium.launch_persistent_context(
             str(profile), headless=headless,
-            viewport={"width": viewport[0], "height": viewport[1]})
+            viewport={"width": viewport[0], "height": viewport[1]},
+            **touch_kwargs)
         page = context.pages[0] if context.pages else context.new_page()
     except Exception:
         pw.stop()
@@ -212,6 +267,8 @@ def open_session(game: str, url: str, profile: Path,
         session._pw = pw
         session._context = context
         session.page = page
+        if INPUT_BRIDGE:
+            _bridge_surface(session)
 
     try:
         session.boot_seconds = session._boot(boot_seconds)
@@ -519,6 +576,7 @@ def main(argv=None) -> int:
 
     log({"selfplay": args.game, "url": url, "scorer": scorer_label,
          "module": module_spec, "start": start_name,
+         "input": "input_bridge" if INPUT_BRIDGE else "mouse+keyboard",
          "sessions": args.sessions, "decisions_cap": args.decisions,
          "temperature": args.temperature, "rows_file": str(rows_path),
          "merge_to": str(merge_base) if merge_base else "none",

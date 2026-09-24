@@ -1,0 +1,47 @@
+{
+  "game": "gyro-squadron-45",
+  "url": "https://retromonkey.com.au/games/gyro-squadron-45/",
+  "source": "games-src/gyro-squadron-45 (scripts/main.gd, tilt_source.gd — button rects in main.gd _make_action_buttons)",
+  "viewport": [540, 960],
+  "input_classes": ["touch", "gyro", "pad"],
+  "controls": {
+    "touch": "two-lane: main.gd boots in MODE_DEVICE (tilt); tap the on-screen 'INPUT: TOUCH DRAG' ModeButton to flip into touch-drag steering (InputEventScreenTouch anchor + InputEventScreenDrag x). A tap anywhere restarts while the overlay is up",
+    "buttons": {
+      "BOMB": "rect (16, view.y-92) 150x68 -> centre (91, 902)",
+      "SUPER": "rect (view.x-166, view.y-92) 150x68 -> centre (449, 902)",
+      "ModeButton": "$UI/ModeButton — toggles tilt <-> touch drag (rect not in code; tap by its on-screen label region)",
+      "RecenterButton": "$UI/RecenterButton — captures the current reading as tilt neutral"
+    },
+    "gyro": "the game's DEFAULT lane: Input.get_gravity() x blended with gyroscope x. On web this is dead — Godot's export wires no deviceorientation handler, so a CDP tilt override reaches the page and the plane does not move. Steer by touch drag after flipping the mode button; use tilt intents only on a real mobile build",
+    "keys": "none bound — no InputEventKey handling"
+  },
+  "touch_zones": {
+    "bomb": [91, 902],
+    "super": [449, 902],
+    "mode_toggle": [90, 120],
+    "recenter": [90, 200],
+    "retry_tap": [270, 480],
+    "drag_anchor": [270, 560]
+  },
+  "keys_map": {},
+  "intents": {
+    "start": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "confirm": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "retry": {"gesture": "tap", "args": {"x": 270, "y": 480}},
+    "enable_touch": {"gesture": "tap", "args": {"x": 90, "y": 120}},
+    "bomb": {"gesture": "tap", "args": {"x": 91, "y": 902}},
+    "super": {"gesture": "tap", "args": {"x": 449, "y": 902}},
+    "recenter": {"gesture": "tap", "args": {"x": 90, "y": 200}},
+    "fire": {"gesture": "pad", "args": {"button": 0, "pressed": true}},
+    "dodge_left": {"gesture": "swipe", "args": {"x1": 380, "y1": 560, "x2": 120, "y2": 560, "dur_ms": 260, "steps": 8}},
+    "dodge_right": {"gesture": "swipe", "args": {"x1": 160, "y1": 560, "x2": 420, "y2": 560, "dur_ms": 260, "steps": 8}},
+    "left": {"gesture": "swipe", "args": {"x1": 380, "y1": 560, "x2": 120, "y2": 560, "dur_ms": 260, "steps": 8}},
+    "right": {"gesture": "swipe", "args": {"x1": 160, "y1": 560, "x2": 420, "y2": 560, "dur_ms": 260, "steps": 8}},
+    "tilt_left": {"gesture": "tilt", "args": {"alpha": 0.0, "beta": 0.0, "gamma": -30.0}},
+    "tilt_right": {"gesture": "tilt", "args": {"alpha": 0.0, "beta": 0.0, "gamma": 30.0}},
+    "tilt_level": {"gesture": "tilt", "args": {"alpha": 0.0, "beta": 0.0, "gamma": 0.0}},
+    "stick_left": {"gesture": "stick", "args": {"idx": 0, "x": -1.0, "y": 0.0}},
+    "stick_right": {"gesture": "stick", "args": {"idx": 0, "x": 1.0, "y": 0.0}},
+    "stick_neutral": {"gesture": "stick", "args": {"idx": 0, "x": 0.0, "y": 0.0}}
+  }
+}

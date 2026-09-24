@@ -49,6 +49,11 @@ cp "$DEPLOY/worker.py"           "$ROOT/"
 cp "$DEPLOY/collect_evidence.py" "$ROOT/"   # the eyes (playwright feed)
 cp "$DEPLOY/selfplay.py"         "$ROOT/"   # the self-play recorder
 cp "$DEPLOY/exec_critique.py"    "$ROOT/"   # issues_to_jobs — the order wire
+cp "$DEPLOY/input_bridge.py"     "$ROOT/"   # the hands (P1_INPUT=bridge actuator)
+if [ -d "$DEPLOY/profiles" ]; then          # per-game gesture profiles
+  mkdir -p "$ROOT/profiles"
+  cp "$DEPLOY/profiles/"*.json "$ROOT/profiles/"
+fi
 
 # --------------------------------------- 3. the retromonkey pull (brain side)
 RETRO="$DEPLOY/retro"
