@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# lappy_godot_wrapper — godot-shaped shim.
+#
+# Pretends to be the godot CLI but actually runs godot inside the
+# gmp-godot:4.7.1-lappy docker image on Lappy, reached over the tailnet.
+# Everything except --path is passed through to godot verbatim; the project
+# named by --path is rsynced up, built there, and the results rsynced back.
+#
+# Usage:
+#   lappy_godot_wrapper --headless --path /home/ubuntu/games-src/<game> --import
+#   lappy_godot_wrapper --headless --path <dir> --export-release "Web"
+#
+# Contract:
+#   --path <dir>   project directory (required; falls back to $PWD)
+#   --path=<dir>   same, equals form
+#   all other args pass through verbatim, order preserved
+#   exit code is godot's exit code
+#
+# Logging: timestamped start/end lines on stderr (nothing-silent law); godot
+# and rsync output stream live through this script. Long runs should be
+# launched detached (nohup ... > log 2>&1 &) and polled.
+#
+# Image notes (see cloud/queue/LAPPY_GODOT.md):
+#   the container runs as uid 1000 with HOME=/tmp and XDG_DATA_HOME=/xdg so
+#   that files it writes into the bind mount stay owned by Lappy's aaron
+#   user and the baked export templates stay reachable.
+
+set -u
+
+LAPPY_HOST="aaron@100.123.86.14"      # tailnet IP
+LAPPY_KEY="$HOME/.ssh/gmp_lappy"
+LAPPY_HOME="/home/aaron"
+LAPPY_JOBS="$LAPPY_HOME/gmp-jobs"     # job scratch on Lappy (root disk)
+IMAGE="gmp-godot:4.7.1-lappy"
+CONTAINER_WORKDIR="/project"
+GODOT_BIN="godot"
+CONTAINER_UIDGID="1000:1000"          # == aaron on Lappy == ubuntu here
+
+SSH_OPTS=(-i "$LAPPY_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+          -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+RSYNC_SSH="ssh -i $LAPPY_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=10"
+# retromonkey<->Lappy is a WAN tailnet path (~90ms RTT, tens of KB/s): zstd
+# compression, whole-file (delta negotiation is useless across jobs), partial
+# resume, and a dead-connection timeout so a stalled sync errors instead of
+# hanging forever.
+RSYNC_OPTS=(-a --whole-file -zz --partial --timeout=180 --no-owner --no-group --exclude .godot --info=stats1)
+
+log() { printf '[%s] lappy_godot_wrapper: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >&2; }
+die() { log "ERROR: $*"; exit 2; }
+
+# ---- parse args ------------------------------------------------------------
+path_arg=""
+args=()
+while (($#)); do
+  case "$1" in
+    --path)
+      (($# >= 2)) || die "--path needs a directory argument"
+      path_arg="$2"; shift 2 ;;
+    --path=*)
+      path_arg="${1#--path=}"; shift ;;
+    *)
+      args+=("$1"); shift ;;
+  esac
+done
+[ -n "$path_arg" ] || path_arg="$PWD"
+[ -d "$path_arg" ] || die "project dir not found: $path_arg"
+
+project_dir="$(cd "$path_arg" && pwd)" || die "cannot enter $path_arg"
+job_name="$(basename "$project_dir")"
+remote_job="$LAPPY_JOBS/$job_name"
+
+t0=$(date +%s)
+log "start project=$project_dir job=$job_name args=${args[*]:-<none>}"
+
+# ---- up --------------------------------------------------------------------
+# --delete: mirror the project (minus .godot) so locally-deleted files don't
+# linger on Lappy and get resurrected by the sync back.
+log "rsync up -> $LAPPY_HOST:gmp-jobs/$job_name/"
+rsync "${RSYNC_OPTS[@]}" --delete -e "$RSYNC_SSH" \
+  "$project_dir"/ "$LAPPY_HOST:$remote_job/" || die "rsync up failed"
+
+# ---- run -------------------------------------------------------------------
+# --path is re-emitted pointing at the container mount; everything else verbatim.
+remote_args=(--path "$CONTAINER_WORKDIR" ${args[@]+"${args[@]}"})
+log "docker run godot on $LAPPY_HOST (image=$IMAGE)"
+ssh "${SSH_OPTS[@]}" "$LAPPY_HOST" \
+  "mkdir -p '$remote_job' && docker run --rm --user $CONTAINER_UIDGID -e HOME=/tmp -e XDG_DATA_HOME=/xdg -v '$remote_job:$CONTAINER_WORKDIR' -w '$CONTAINER_WORKDIR' '$IMAGE' '$GODOT_BIN'" \
+  ${remote_args[@]+"${remote_args[@]}"}
+rc=$?
+t1=$(date +%s)
+
+# ---- back ------------------------------------------------------------------
+log "rsync back <- $LAPPY_HOST:gmp-jobs/$job_name/ (godot rc=$rc, godot took $((t1 - t0))s)"
+rsync "${RSYNC_OPTS[@]}" -e "$RSYNC_SSH" \
+  "$LAPPY_HOST:$remote_job/" "$project_dir"/ || die "rsync back failed"
+
+log "end rc=$rc total=$(( $(date +%s) - t0 ))s"
+exit "$rc"
