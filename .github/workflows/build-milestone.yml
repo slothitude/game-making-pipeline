@@ -32,7 +32,7 @@ jobs:
     name: Brain builds -> gates judge -> deploy
     runs-on: ubuntu-latest
     container:
-      image: docker://barichello/godot-ci:4.7.1
+      image: barichello/godot-ci:4.7.1
     env:
       GAME_SLUG: ${{ inputs.game }}
       MILESTONE: ${{ inputs.milestone }}

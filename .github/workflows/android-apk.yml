@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       # Same reproducible builder image as games-ci.
-      image: docker://barichello/godot-ci:4.7.1
+      image: barichello/godot-ci:4.7.1
     env:
       # Push triggers have no inputs — default to the flagship repo.
       GAME_SLUG: ${{ inputs.game || 'octogram-arcade' }}

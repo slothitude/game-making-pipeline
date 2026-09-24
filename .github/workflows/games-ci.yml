@@ -34,7 +34,7 @@ jobs:
       # The reproducible headless gate/export runner — no Rog required.
       # NOTE: this image ships the Godot editor only, NOT export templates; the
       # bootstrap step below fetches the matching templates when deploying.
-      image: docker://barichello/godot-ci:4.7.1
+      image: barichello/godot-ci:4.7.1
     env:
       GAME_SLUG: ${{ inputs.game }}
     steps:

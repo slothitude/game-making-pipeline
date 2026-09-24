@@ -54,18 +54,14 @@ jobs:
     # The runner's label as registered on the Forgejo instance.
     runs-on: ubuntu-latest
     container:
-      # The reproducible headless gate runner — same image games-ci uses, so
-      # pi's code is judged by the exact binary Rog's walls are judged by.
-      image: docker://barichello/godot-ci:4.7.1
+      # The reproducible headless gate runner: the server's pre-pulled
+      # gmp-godot:4.7.1 (Godot 4.7.1 + git + curl + unzip + fontconfig baked in,
+      # so no apt bootstrap step and no Hub pull per run). NO docker:// scheme —
+      # in a job's container.image that scheme is runner-label syntax, not a
+      # docker reference, and act_runner dies on it with "invalid reference
+      # format" before the job even starts.
+      image: gmp-godot:4.7.1
     steps:
-      # The godot image is minimal: no git, no unzip, no curl. git for checkout
-      # (node is mounted in from the runner), curl for forensics, fontconfig
-      # because headless Godot still wants it. Same bootstrap as games-ci.
-      - name: Install git + curl + unzip + fontconfig (godot image is minimal)
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends git curl unzip ca-certificates fontconfig
-
       # The game repo itself — this workflow lives IN the repo it gates.
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,7 +118,9 @@ the sentence + yaml block above. The one-line summary of the addition:
 
 ## What the wall does (per run)
 
-1. `apt-get` bootstrap of the minimal godot image (git/curl/unzip/fontconfig).
+1. Container start on the server's pre-pulled `gmp-godot:4.7.1`
+   (git/curl/unzip/fontconfig baked in — no apt step; the image ref carries NO
+   `docker://` scheme, which is runner-label syntax and fails the job).
 2. Checkout of the repo the workflow lives in.
 3. Suite discovery: every flat `tests/*_tests.gd` + `tests/*_replay.gd`, sorted;
    zero suites = red (an empty wall proves nothing).

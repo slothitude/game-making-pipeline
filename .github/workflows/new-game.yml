@@ -20,7 +20,7 @@ jobs:
     name: Instantiate + gate + deploy player game
     runs-on: ubuntu-latest
     container:
-      image: docker://barichello/godot-ci:4.7.1
+      image: barichello/godot-ci:4.7.1
     env:
       ORDER_FILE: ${{ inputs.order_file }}
       GAMES_TOKEN: ${{ secrets.GAMES_TOKEN }}

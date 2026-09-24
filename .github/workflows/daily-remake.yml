@@ -23,7 +23,7 @@ jobs:
     name: One game a day
     runs-on: ubuntu-latest
     container:
-      image: docker://barichello/godot-ci:4.7.1
+      image: barichello/godot-ci:4.7.1
     env:
       NVAPI_KEY: ${{ secrets.NVAPI_KEY }}
       OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
