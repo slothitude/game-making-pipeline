@@ -1,0 +1,82 @@
+{
+ "sonar": [
+  {
+   "seed": 1984,
+   "expected": 3,
+   "found": 3,
+   "recall": 1.0,
+   "max_err_px": 0.7,
+   "missed": [],
+   "pass": true
+  },
+  {
+   "seed": 2001,
+   "expected": 3,
+   "found": 3,
+   "recall": 1.0,
+   "max_err_px": 0.5,
+   "missed": [],
+   "pass": true
+  }
+ ],
+ "star-visitor": [
+  {
+   "seed": 1984,
+   "expected": 3,
+   "found": 3,
+   "recall": 1.0,
+   "max_err_px": 0.7,
+   "missed": [],
+   "pass": true
+  },
+  {
+   "seed": 2001,
+   "expected": 3,
+   "found": 3,
+   "recall": 1.0,
+   "max_err_px": 2.1,
+   "missed": [],
+   "pass": true
+  }
+ ],
+ "gyro-squadron-45": [
+  {
+   "seed": 1984,
+   "expected": 8,
+   "found": 8,
+   "recall": 1.0,
+   "max_err_px": 1.1,
+   "missed": [],
+   "pass": true
+  },
+  {
+   "seed": 2001,
+   "expected": 8,
+   "found": 8,
+   "recall": 1.0,
+   "max_err_px": 0.7,
+   "missed": [],
+   "pass": true
+  }
+ ],
+ "slime-line": [
+  {
+   "seed": 1984,
+   "expected": 4,
+   "found": 4,
+   "recall": 1.0,
+   "max_err_px": 0.7,
+   "missed": [],
+   "pass": true
+  },
+  {
+   "seed": 2001,
+   "expected": 4,
+   "found": 4,
+   "recall": 1.0,
+   "max_err_px": 1.0,
+   "missed": [],
+   "pass": true
+  }
+ ]
+}

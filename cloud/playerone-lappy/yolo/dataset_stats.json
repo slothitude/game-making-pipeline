@@ -1,0 +1,106 @@
+{
+ "per_game": [
+  {
+   "game": "sonar",
+   "images": 600,
+   "instances": 4885,
+   "per_class": {
+    "items:wreck_beacon": 1628,
+    "player:sub_player": 1621,
+    "threats:creature_drifter": 1636
+   },
+   "backgrounds_real": 30,
+   "classes": [
+    "items:wreck_beacon",
+    "player:sub_player",
+    "threats:creature_drifter"
+   ],
+   "class_id_base": 0
+  },
+  {
+   "game": "star-visitor",
+   "images": 600,
+   "instances": 6958,
+   "per_class": {
+    "player:hero_idle": 1647,
+    "threats:bullet": 1655,
+    "threats:enemy_agent": 3656
+   },
+   "backgrounds_real": 30,
+   "classes": [
+    "player:hero_idle",
+    "threats:bullet",
+    "threats:enemy_agent"
+   ],
+   "class_id_base": 3
+  },
+  {
+   "game": "gyro-squadron-45",
+   "images": 600,
+   "instances": 4816,
+   "per_class": {
+    "items:bullet_player": 609,
+    "player:player_bank_left": 586,
+    "player:player_p51": 584,
+    "threats:boss_fortress": 599,
+    "threats:bullet_enemy": 602,
+    "threats:enemy_bomber": 604,
+    "threats:enemy_fighter": 611,
+    "threats:enemy_ufo": 621
+   },
+   "backgrounds_real": 0,
+   "classes": [
+    "items:bullet_player",
+    "player:player_bank_left",
+    "player:player_p51",
+    "threats:boss_fortress",
+    "threats:bullet_enemy",
+    "threats:enemy_bomber",
+    "threats:enemy_fighter",
+    "threats:enemy_ufo"
+   ],
+   "class_id_base": 6
+  },
+  {
+   "game": "slime-line",
+   "images": 600,
+   "instances": 4889,
+   "per_class": {
+    "items:salt_crystal": 1220,
+    "player:slug_player": 1224,
+    "threats:bug_gold": 1219,
+    "threats:bug_green": 1226
+   },
+   "backgrounds_real": 0,
+   "classes": [
+    "items:salt_crystal",
+    "player:slug_player",
+    "threats:bug_gold",
+    "threats:bug_green"
+   ],
+   "class_id_base": 14
+  }
+ ],
+ "total_images": 2400,
+ "total_instances": 21548,
+ "classes": {
+  "0": "sonar.items:wreck_beacon",
+  "1": "sonar.player:sub_player",
+  "2": "sonar.threats:creature_drifter",
+  "3": "star-visitor.player:hero_idle",
+  "4": "star-visitor.threats:bullet",
+  "5": "star-visitor.threats:enemy_agent",
+  "6": "gyro-squadron-45.items:bullet_player",
+  "7": "gyro-squadron-45.player:player_bank_left",
+  "8": "gyro-squadron-45.player:player_p51",
+  "9": "gyro-squadron-45.threats:boss_fortress",
+  "10": "gyro-squadron-45.threats:bullet_enemy",
+  "11": "gyro-squadron-45.threats:enemy_bomber",
+  "12": "gyro-squadron-45.threats:enemy_fighter",
+  "13": "gyro-squadron-45.threats:enemy_ufo",
+  "14": "slime-line.items:salt_crystal",
+  "15": "slime-line.player:slug_player",
+  "16": "slime-line.threats:bug_gold",
+  "17": "slime-line.threats:bug_green"
+ }
+}

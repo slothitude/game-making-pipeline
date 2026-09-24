@@ -1,0 +1,124 @@
+{
+ "imgsz": 800,
+ "epochs": 70,
+ "batch": 4,
+ "overall_mAP50": 0.9828,
+ "overall_mAP50-95": 0.835,
+ "mean_precision": 0.9856,
+ "mean_recall": 0.9738,
+ "per_class": {
+  "sonar.items:wreck_beacon": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.8951,
+   "precision": 1.0,
+   "recall": 0.9968
+  },
+  "sonar.player:sub_player": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.9213,
+   "precision": 0.9954,
+   "recall": 1.0
+  },
+  "sonar.threats:creature_drifter": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.8822,
+   "precision": 0.9941,
+   "recall": 0.9905
+  },
+  "star-visitor.player:hero_idle": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.8187,
+   "precision": 1.0,
+   "recall": 0.9991
+  },
+  "star-visitor.threats:bullet": {
+   "mAP50": 0.8623,
+   "mAP50-95": 0.4598,
+   "precision": 0.893,
+   "recall": 0.7605
+  },
+  "star-visitor.threats:enemy_agent": {
+   "mAP50": 0.9947,
+   "mAP50-95": 0.763,
+   "precision": 0.9778,
+   "recall": 0.9955
+  },
+  "gyro-squadron-45.items:bullet_player": {
+   "mAP50": 0.9641,
+   "mAP50-95": 0.6425,
+   "precision": 0.9865,
+   "recall": 0.96
+  },
+  "gyro-squadron-45.player:player_bank_left": {
+   "mAP50": 0.9638,
+   "mAP50-95": 0.8302,
+   "precision": 0.9536,
+   "recall": 0.9492
+  },
+  "gyro-squadron-45.player:player_p51": {
+   "mAP50": 0.9883,
+   "mAP50-95": 0.895,
+   "precision": 0.979,
+   "recall": 0.975
+  },
+  "gyro-squadron-45.threats:boss_fortress": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.9745,
+   "precision": 0.9952,
+   "recall": 0.9917
+  },
+  "gyro-squadron-45.threats:bullet_enemy": {
+   "mAP50": 0.9926,
+   "mAP50-95": 0.7707,
+   "precision": 0.9945,
+   "recall": 0.9664
+  },
+  "gyro-squadron-45.threats:enemy_bomber": {
+   "mAP50": 0.9948,
+   "mAP50-95": 0.9259,
+   "precision": 0.9879,
+   "recall": 1.0
+  },
+  "gyro-squadron-45.threats:enemy_fighter": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.9248,
+   "precision": 1.0,
+   "recall": 0.991
+  },
+  "gyro-squadron-45.threats:enemy_ufo": {
+   "mAP50": 0.9794,
+   "mAP50-95": 0.8687,
+   "precision": 0.9904,
+   "recall": 0.969
+  },
+  "slime-line.items:salt_crystal": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.815,
+   "precision": 0.9995,
+   "recall": 0.9918
+  },
+  "slime-line.player:slug_player": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.9347,
+   "precision": 0.9977,
+   "recall": 1.0
+  },
+  "slime-line.threats:bug_gold": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.8612,
+   "precision": 0.9979,
+   "recall": 0.9959
+  },
+  "slime-line.threats:bug_green": {
+   "mAP50": 0.995,
+   "mAP50-95": 0.8457,
+   "precision": 0.9975,
+   "recall": 0.9958
+  }
+ },
+ "val_seconds": 6.7,
+ "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+ "weights": "/home/aaron/playerone/yolo/best.pt",
+ "inference_ms": "0.5 preprocess / 2.8 inference / 0.8 postprocess (train log, 3060)",
+ "onnx": "/home/aaron/playerone/yolo/best.onnx"
+}

@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
-"""playerone-lappy perception — PlayerOne's eyes v1: OpenCV template matching.
+"""playerone-lappy perception — PlayerOne's eyes: templates v1 + YOLO fusion v2.
 
 The move: the v1 critic reads screenshots as prose (LLM descriptions of a
 brightness grid). This gives PlayerOne cheap deterministic eyes instead:
 cv2.matchTemplate (TM_CCOEFF_NORMED) of each game's own sprite art against
 the live frame, multi-scale, NMS'd into one state dict.
 
-    perceive(frame_bgr, game) -> {"t", "player", "threats", "items", "all"}
+    perceive(frame_bgr, game) -> {"t", "player", "threats", "items", "all",
+                                  "source", "yolo_ms"}
+
+V2 — the fusion lane (off by default; P1_EYES=fusion turns it on): templates
+stay primary for the static sprites they are exact on; a YOLO detector trained
+on synthetic paste-ups of the same sprites (yolo/gen_data.py) answers what
+templates cannot — classes whose art animates (star-visitor's walking agents,
+the banking pose), anything a template scores under the 0.75 law, and classes
+v1 dropped outright (star-visitor's ~11x5 px bullet, sub-NCC at any threshold).
+The state dict gains "source": {"<index in 'all'>": "template"|"yolo"} so a
+consumer can tell which eye fired. A venv without ultralytics degrades to the
+pure template lane — the flag gates it, never a crash.
 
 SPRITES: sprites/<game>/*.png — the game's generated art scp'd off retromonkey
 (games-src/<game>/assets/generated). sprites/<game>/roles.json says which
@@ -43,6 +54,10 @@ SPRITES_DIR = Path(os.environ.get("P1_SPRITES", HERE / "sprites"))
 
 SEARCH_WIDTH = 480        # frames are searched at this width, hits scaled back
 MATCH_THRESHOLD = 0.75    # TM_CCOEFF_NORMED score a hit must clear
+# roles.json sizes: an int is the on-screen long-edge px; a [w, h] pair is the
+# exact on-screen box — some games draw target_size non-uniformly (star-visitor
+# draws its alien at 20x28 where the art's aspect gives 18x28), and at these
+# sizes two px of width is ~0.2 of NCC
 MATCH_SCALES = (0.8, 1.0, 1.25)   # games scale; search around each class size
 COARSE_DIVISOR = 2        # the cheap pass scans at SEARCH_WIDTH // this, then
                           # promising peaks are re-scored at full search res
@@ -54,7 +69,10 @@ MAX_HITS_PER_MAP = 12     # candidate peaks kept per template-scale heatmap
 DEFAULT_CLASS_PX = 48     # canonical long edge when roles.json gives no size
 MIN_TEMPLATE_STD = 4.0    # flatter than this carries no NCC information —
                           # sonar's creature_lurker.png is an opaque black square
-NEUTRAL = 127             # grey sprites are alpha-flattened onto
+NEUTRAL = 127             # grey sprites are alpha-flattened onto ...
+BG_BIN = 16               # ... or onto the frame's own median luma, quantized
+                          # to this bin (sonar's sea sits at ~40: a sprite
+                          # flattened onto 127 loses ~0.07 NCC against it)
 SELFTEST_TOL_PX = 8       # a recovered centre must be within this of the truth
 SELFTEST_MIN_RECALL = 0.9
 SELFTEST_MIN_SPRITE_PX = 36   # sub-36px art is below template resolution —
@@ -62,13 +80,23 @@ SELFTEST_MIN_SPRITE_PX = 36   # sub-36px art is below template resolution —
 SELFTEST_SIZE = (480, 800)        # portrait synthetic frame (the phone frame)
 BENCH_SIZE = (1280, 720)  # the 720p perf target frame
 
+# ------- eyes v2: the YOLO fusion lane (off unless P1_EYES=fusion) -------
+YOLO_WEIGHTS = os.environ.get("P1_YOLO_WEIGHTS", str(HERE / "yolo" / "best.pt"))
+YOLO_DEFAULT_CONF = 0.10  # raw detector floor; the template law still governs
+YOLO_IMGSZ = 800          # 480x800 captures stay at native res — the gap this
+                          # lane closes is 20x28 px sprites, 640 would shrink
+                          # them to 16x22 before the net sees them
+YOLO_SAME_IOU = 0.30      # a same-class template hit keeps its spot; YOLO
+                          # only fills where templates found nothing
+
 
 # ------------------------------------------------------------- sprites --
 def _roles(game: str) -> dict:
-    """sprites/<game>/roles.json -> {"player": {name: px}, "threats": ...}.
+    """sprites/<game>/roles.json -> {"player": {name: size}, "threats": ...}.
 
-    Missing file or malformed entries are a perception gap, not a crash: the
-    game just yields no templates for the roles it does not declare.
+    size is an int (on-screen long-edge px) or a [w, h] pair. Missing file or
+    malformed entries are a perception gap, not a crash: the game just yields
+    no templates for the roles it does not declare.
     """
     path = SPRITES_DIR / game / "roles.json"
     if not path.is_file():
@@ -77,27 +105,34 @@ def _roles(game: str) -> dict:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    roles: dict[str, dict[str, int]] = {}
+    roles: dict[str, dict] = {}
     for role in ("player", "threats", "items"):
         block = raw.get(role)
         if not isinstance(block, dict):
             continue
-        sized: dict[str, int] = {}
+        sized: dict = {}
         for name, px in block.items():
             try:
-                sized[str(name)] = int(px) if px else DEFAULT_CLASS_PX
+                if isinstance(px, (list, tuple)) and len(px) == 2:
+                    sized[str(name)] = (int(px[0]), int(px[1]))
+                else:
+                    sized[str(name)] = int(px) if px else DEFAULT_CLASS_PX
             except (TypeError, ValueError):
                 sized[str(name)] = DEFAULT_CLASS_PX
         roles[role] = sized
     return roles
 
 
-def _flatten(sprite_path: Path, canon_px: int) -> np.ndarray | None:
-    """One sprite -> grayscale template, long edge == canon_px.
+def _flatten(sprite_path: Path, canon_px, bg: int = NEUTRAL
+             ) -> np.ndarray | None:
+    """One sprite -> grayscale template at the roles.json size.
 
-    RGBA: crop to the alpha bounding box, alpha-blend onto NEUTRAL grey (the
-    matchTemplate law here has no mask, so the flat surround must be constant).
-    Returns None for unreadable/empty art — one bad png never kills the game.
+    canon_px is an int (long edge) or a (w, h) pair for art a game draws
+    non-uniformly. RGBA: crop to the alpha bounding box, alpha-blend onto a
+    constant grey — usually the frame's own median luma (bg), NEUTRAL when the
+    caller has no frame yet (the matchTemplate law here has no mask, so the
+    flat surround must be constant). Returns None for unreadable/empty art —
+    one bad png never kills the game.
     """
     img = cv2.imread(str(sprite_path), cv2.IMREAD_UNCHANGED)
     if img is None:
@@ -114,46 +149,115 @@ def _flatten(sprite_path: Path, canon_px: int) -> np.ndarray | None:
             alpha = img[:, :, 3].astype(np.float32) / 255.0
             rgb = img[:, :, :3]
             gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY).astype(np.float32)
-            gray = gray * alpha + float(NEUTRAL) * (1.0 - alpha)
+            gray = gray * alpha + float(bg) * (1.0 - alpha)
         else:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = gray.astype(np.uint8)
     h, w = gray.shape[:2]
-    long_edge = max(h, w)
-    if long_edge <= 0:
-        return None
-    if long_edge != canon_px:
+    if isinstance(canon_px, tuple):
+        size = (max(1, canon_px[0]), max(1, canon_px[1]))
+    else:
+        long_edge = max(h, w)
+        if long_edge <= 0:
+            return None
         if w >= h:
             size = (canon_px, max(1, round(h * canon_px / w)))
         else:
             size = (max(1, round(w * canon_px / h)), canon_px)
+    if size != (w, h):
         gray = cv2.resize(gray, size, interpolation=cv2.INTER_AREA)
     if float(gray.std()) < MIN_TEMPLATE_STD:
         return None   # degenerate art (a flat square) — NCC would fire at 1.0
     return gray
 
 
-def _templates(game: str) -> dict[str, list[np.ndarray]]:
+def _templates(game: str, bg: int = NEUTRAL) -> dict[str, list[np.ndarray]]:
     """role class name (e.g. "threats:bug_gold") -> list of gray templates.
 
-    Cached per game; a sprite missing from disk just drops out of the list.
+    Cached per (game, bg bin); a sprite missing from disk just drops out of
+    the list.
     """
-    cached = _TEMPLATE_CACHE.get(game)
+    key = (game, int(bg))
+    cached = _TEMPLATE_CACHE.get(key)
     if cached is not None:
         return cached
     out: dict[str, list[np.ndarray]] = {}
     for role, sized in _roles(game).items():
         for name, canon_px in sized.items():
             path = SPRITES_DIR / game / f"{name}.png"
-            tmpl = _flatten(path, canon_px) if path.is_file() else None
+            tmpl = _flatten(path, canon_px, bg) if path.is_file() else None
             if tmpl is None:
                 continue
             out.setdefault(f"{role}:{name}", []).append(tmpl)
-    _TEMPLATE_CACHE[game] = out
+    _TEMPLATE_CACHE[key] = out
     return out
 
 
-_TEMPLATE_CACHE: dict[str, dict[str, list[np.ndarray]]] = {}
+_TEMPLATE_CACHE: dict[tuple, dict[str, list[np.ndarray]]] = {}
+
+
+# ---------------------------------------------------------------- fusion --
+_FUSION: dict = {"enabled": os.environ.get("P1_EYES", "") == "fusion",
+                 "weights": YOLO_WEIGHTS, "model": None, "tried": False}
+
+
+def configure(enabled: bool | None = None, weights: str | None = None) -> None:
+    """Eyes v2 switches. enabled=False pins the v1 template lane (the default
+    when P1_EYES is unset); weights points at the YOLO run to load lazily."""
+    if enabled is not None:
+        _FUSION["enabled"] = bool(enabled)
+    if weights is not None:
+        _FUSION["weights"] = weights
+        _FUSION["model"] = None
+        _FUSION["tried"] = False
+
+
+def _yolo_model():
+    """Lazy ultralytics load. The worker venv has no torch — a missing
+    ultralytics (or a missing weights file) degrades to the pure template
+    lane. The fusion flag gates the lane; it can never crash perception."""
+    if _FUSION["tried"]:
+        return _FUSION["model"]
+    _FUSION["tried"] = True
+    try:
+        from ultralytics import YOLO   # noqa: PLC0415 — loaded on first use
+    except ImportError:
+        return None
+    path = _FUSION.get("weights") or YOLO_WEIGHTS
+    if not Path(path).is_file():
+        return None
+    try:
+        _FUSION["model"] = YOLO(str(path))
+    except Exception:
+        _FUSION["model"] = None
+    return _FUSION["model"]
+
+
+def _yolo_dets(model, frame_bgr: np.ndarray, game: str, conf: float,
+               imgsz: int) -> list[tuple]:
+    """One YOLO pass -> [(cls, x, y, w, h, conf)] for THIS game's classes.
+
+    Class ids are game-prefixed at training time (one model serves every
+    game), so a star-visitor frame never inherits a gyro box. Coordinates come
+    back in the caller's pixels — ultralytics letterboxes internally and
+    undoes it on the way out."""
+    res = model.predict(frame_bgr, imgsz=imgsz, conf=conf, verbose=False)[0]
+    names = res.names
+    out: list[tuple] = []
+    for b in res.boxes:
+        cname = names.get(int(b.cls), "")
+        if not cname.startswith(game + "."):
+            continue
+        x0, y0, x1, y1 = (float(v) for v in b.xyxy[0])
+        out.append((cname.split(".", 1)[1], x0, y0, x1 - x0, y1 - y0,
+                    round(float(b.conf), 4)))
+    return out
+
+
+def _frame_bg(gray: np.ndarray) -> int:
+    """The search image's median luma, quantized to BG_BIN — the grey sprites
+    get flattened onto for this frame (bounded template-cache key space)."""
+    return int(round(float(np.median(gray)) / BG_BIN) * BG_BIN)
 
 
 # ------------------------------------------------------------- matching --
@@ -219,24 +323,30 @@ def _refine(gray: np.ndarray, tmpl: np.ndarray, x: int, y: int,
 
 
 def perceive(frame_bgr: np.ndarray, game: str,
-             threshold: float = MATCH_THRESHOLD) -> dict:
+             threshold: float = MATCH_THRESHOLD,
+             yolo_model=None, yolo_conf: float | None = None,
+             yolo_imgsz: int | None = None) -> dict:
     """One frame -> the state dict. Coordinates are the caller's pixels.
 
     Two passes keep the CPU bill low: every template-scale is scanned on the
     half-width coarse image (the DFT cost of matchTemplate is per-call, so the
     small image is what saves the millisecond), then the top candidates per
     class are re-scored on the full-width search image where positions are
-    exact.
+    exact. With the fusion lane on, one YOLO pass runs after the template
+    lane and fills only the holes templates left (see _yolo_dets).
 
     {"t": epoch seconds, "frame": [w, h], "ms": matcher wall ms,
      "player": (x, y, conf) of the best player hit or None,
      "threats": [(cls, x, y, w, h, conf)], "items": [...],
-     "all": [every detection]}
+     "all": [every detection],
+     "source": {"<index into all>": "template"|"yolo"},
+     "yolo_ms": wall ms of the YOLO pass (0.0 when the lane is off)}
     """
     t0 = time.perf_counter()
     fh, fw = frame_bgr.shape[:2]
     empty = {"t": time.time(), "frame": [fw, fh], "player": None,
-             "threats": [], "items": [], "all": []}
+             "threats": [], "items": [], "all": [],
+             "source": {}, "yolo_ms": 0.0}
     if fw <= 0 or fh <= 0:
         return empty
     k = SEARCH_WIDTH / fw
@@ -251,7 +361,7 @@ def perceive(frame_bgr: np.ndarray, game: str,
     coarse_floor = threshold - COARSE_SLACK
 
     by_role: dict[str, list[tuple]] = {}
-    for cls, tmpls in _templates(game).items():
+    for cls, tmpls in _templates(game, _frame_bg(gray)).items():
         role = cls.split(":", 1)[0]
         candidates: list[tuple[float, int, int, tuple, int]] = []
         for t_idx, tmpl in enumerate(tmpls):
@@ -287,6 +397,37 @@ def perceive(frame_bgr: np.ndarray, game: str,
 
     all_dets = _nms([d for dets in by_role.values() for d in dets],
                     CROSS_CLASS_IOU)
+    source: dict[str, str] = {str(i): "template"
+                              for i in range(len(all_dets))}
+
+    # ---- eyes v2: the YOLO pass fills only the holes templates left ----
+    model = yolo_model
+    if model is None and _FUSION["enabled"]:
+        model = _yolo_model()
+    yolo_ms = 0.0
+    if model is not None:
+        ty0 = time.perf_counter()
+        ydets = _yolo_dets(model, frame_bgr, game,
+                           YOLO_DEFAULT_CONF if yolo_conf is None else yolo_conf,
+                           YOLO_IMGSZ if yolo_imgsz is None else yolo_imgsz)
+        yolo_ms = (time.perf_counter() - ty0) * 1000.0
+        extra: list[tuple] = []
+        for cls, x, y, w, h, cf in ydets:
+            # the template lane stays primary: a same-class template hit
+            # keeps its spot; YOLO answers the animated classes, the
+            # sub-0.75-conf frames, and the classes v1 dropped outright
+            if not any(d[0] == cls
+                       and _iou((cls, x, y, w, h, cf), d) > YOLO_SAME_IOU
+                       for d in all_dets):
+                extra.append((cls, round(x), round(y), round(w), round(h), cf))
+        if extra:
+            extra = _nms(extra, NMS_IOU)
+            kept = _nms(all_dets + extra, CROSS_CLASS_IOU)
+            extra_ids = {id(e) for e in extra}
+            all_dets = kept
+            source = {str(i): ("yolo" if id(d) in extra_ids else "template")
+                      for i, d in enumerate(all_dets)}
+
     player = None
     players = [d for d in all_dets if d[0].startswith("player:")]
     if players:
@@ -297,8 +438,9 @@ def perceive(frame_bgr: np.ndarray, game: str,
     items = [d for d in all_dets if d[0].startswith("items:")]
     return {"t": time.time(), "frame": [fw, fh],
             "ms": round((time.perf_counter() - t0) * 1000.0, 2),
+            "yolo_ms": round(yolo_ms, 2),
             "player": player, "threats": threats, "items": items,
-            "all": all_dets}
+            "all": all_dets, "source": source}
 
 
 def annotate(frame_bgr: np.ndarray, state: dict) -> np.ndarray:
@@ -329,30 +471,38 @@ def _synthetic_frame(game: str, size: tuple[int, int], rng: np.random.Generator
     base = np.clip(base.astype(np.float32) * grad, 0, 255).astype(np.uint8)
     frame = base
 
-    sprites: list[tuple[str, Path, int]] = []
+    sprites: list[tuple[str, Path, object]] = []
     for role, sized in _roles(game).items():
-        for name, canon_px in sized.items():
+        for name, size in sized.items():
             path = SPRITES_DIR / game / f"{name}.png"
-            if path.is_file() and max(canon_px, 0) >= SELFTEST_MIN_SPRITE_PX:
-                sprites.append((f"{role}:{name}", path, canon_px))
+            long = max(size) if isinstance(size, tuple) else size
+            # the 36px floor guards *estimates*; an explicit [w, h] pair is a
+            # measurement off live captures — it is in, whatever its size
+            covered = isinstance(size, tuple) or long >= SELFTEST_MIN_SPRITE_PX
+            if path.is_file() and covered:
+                sprites.append((f"{role}:{name}", path, size))
     rng.shuffle(sprites)
     sprites = sprites[:10]
 
     truth: list[tuple[str, int, int]] = []
     placed: list[tuple[int, int, int, int]] = []   # x0, y0, x1, y1, inflated
-    for cls, path, canon_px in sprites:
+    for cls, path, size in sprites:
         sprite = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
         if sprite is None:
             continue
-        scale = float(rng.choice(MATCH_SCALES))
-        long_px = canon_px * (w / SEARCH_WIDTH) * scale
-        sh_, sw_ = sprite.shape[:2]
-        if sw_ >= sh_:
-            tw = int(round(long_px))
-            th = max(1, int(round(sh_ * long_px / sw_)))
+        scale = float(rng.choice(MATCH_SCALES)) * (w / SEARCH_WIDTH)
+        if isinstance(size, tuple):
+            tw = max(1, int(round(size[0] * scale)))
+            th = max(1, int(round(size[1] * scale)))
         else:
-            tw = max(1, int(round(sw_ * long_px / sh_)))
-            th = int(round(long_px))
+            long_px = size * scale
+            sh_, sw_ = sprite.shape[:2]
+            if sw_ >= sh_:
+                tw = int(round(long_px))
+                th = max(1, int(round(sh_ * long_px / sw_)))
+            else:
+                tw = max(1, int(round(sw_ * long_px / sh_)))
+                th = int(round(long_px))
         if th >= h or tw >= w:
             continue
         pad = 12   # keep pastes apart so NMS never has a reason to merge them

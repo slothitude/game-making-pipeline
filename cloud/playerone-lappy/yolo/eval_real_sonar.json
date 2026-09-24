@@ -1,0 +1,79 @@
+{
+ "game": "sonar",
+ "frames": 30,
+ "gt_source": "v1@0.45",
+ "eval_iou": 0.4,
+ "yolo_conf": 0.1,
+ "imgsz": 800,
+ "per_class": {
+  "items:wreck_beacon": {
+   "v1": {
+    "recall": 0.0,
+    "hits": 0,
+    "gt": 68,
+    "mean_conf": null
+   },
+   "fused": {
+    "recall": 0.0,
+    "hits": 0,
+    "gt": 68,
+    "mean_conf": null
+   },
+   "yolo": {
+    "recall": 0.0,
+    "hits": 0,
+    "gt": 68,
+    "mean_conf": null
+   }
+  },
+  "player:sub_player": {
+   "v1": {
+    "recall": 0.588,
+    "hits": 20,
+    "gt": 34,
+    "mean_conf": 0.864
+   },
+   "fused": {
+    "recall": 0.588,
+    "hits": 20,
+    "gt": 34,
+    "mean_conf": 0.864
+   },
+   "yolo": {
+    "recall": 0.588,
+    "hits": 20,
+    "gt": 34,
+    "mean_conf": 0.939
+   }
+  },
+  "threats:creature_drifter": {
+   "v1": {
+    "recall": 0.721,
+    "hits": 31,
+    "gt": 43,
+    "mean_conf": 0.924
+   },
+   "fused": {
+    "recall": 0.721,
+    "hits": 31,
+    "gt": 43,
+    "mean_conf": 0.924
+   },
+   "yolo": {
+    "recall": 0.419,
+    "hits": 18,
+    "gt": 43,
+    "mean_conf": 0.62
+   }
+  }
+ },
+ "ms_per_frame": {
+  "template_only": 20.5,
+  "fused": 31.0,
+  "yolo_alone": 9.8
+ },
+ "v1_detections_total": 51,
+ "fused_detections_total": 51,
+ "fused_yolo_sourced": 0,
+ "yolo_raw_detections_total": 38
+}
