@@ -1,0 +1,26 @@
+# playerone.service — PlayerOne as a Lappy service (the play/see lane).
+#
+# The @MARKERS@ are substituted by setup.sh at deploy time (secrets never
+# live in this repo). Deploy: bash ~/playerone-deploy/setup.sh
+#
+[Unit]
+Description=PlayerOne worker on lappy (play/see lane — claims critique/playtest/emulator/selfplay from the retromonkey queue)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/aaron/playerone
+Environment=PLAYERONE_ROOT=/home/aaron/playerone
+Environment=GATEWAY_URL=https://retromonkey.com.au/api
+Environment=GATEWAY_TOKEN=@GATEWAY_TOKEN@
+Environment=NVAPI_KEY=@NVAPI_KEY@
+Environment=OPENROUTER_KEY=@OPENROUTER_KEY@
+ExecStart=@VENV_PY@ @WORKER@
+Restart=always
+RestartSec=10
+# a critique ladder run can legitimately take ~30min; let an explicit
+# `systemctl stop` finish the in-flight job's error POST instead of SIGKILL
+TimeoutStopSec=600
+
+[Install]
+WantedBy=multi-user.target

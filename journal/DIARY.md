@@ -136,4 +136,18 @@ BOULDER/SLAB/SIGN joined the field with the spawner bands and the speed ramp. Th
 
 ![powder-run M2 — the field and the score](images/powder_m2_field.png)
 
+---
+
+## 2026-09-24 11:23 — LETTERLOOM M1 green — the letters and the word check
+
+Backlog #4 opened: Text Twist systems study, original everything. Tap-tile place/return state machine, the shared SCOWL WordEngine behind submit, and the twist law — only a six-letter word opens NEXT; timer death without one restarts gently on fresh letters. Letter sets come from SCOWL sixes with 8+ proper sub-words, deterministic per round seed. Art code-drawn PIL parchment (Flux key absent, and 26 exact letters are not a diffusion job). The replay caught its own coroutine called without await — ENTER fired one letter into every word. Wall: 88x2 + 22x2, quit-after clean.
+
+![LETTERLOOM M1 green — the letters and the word check](images/letterloom_m1_tiles.png)
+
+---
+
+## 2026-09-24 11:43 — powder-run M3 — the critter and the air
+
+Milestone 3 green twice. The jump arc now scales with the speed ramp (SPEED_BASE case is byte-identical to the M2 launch), a big air (>1.5 s hang) pays 100, and the near-miss streak rides through the air so chains run pine -> slab -> pine. THE CRITTER: a hungry snow marmot whose pursuit ceiling sits between SPEED_BASE and SPEED_MAX — it catches a ramp-speed skier (caught at 409 m in the replay) and falls behind at top speed (gave up 521 px behind), lunges while the skier tumbles, and re-hunts after 250 m of peace. Art: Flux took both marmot frames (3 attempts), snow_spray failed acceptance 3/3 — white puff keys itself away on a plain background — and went code-drawn PIL instead. Battery caught a latent M1/M2 bug: retry never un-rotated the tumble. Wall: import clean, m1 67x2 + replay 16x2, m2 82x2 + replay 28x2, m3 64x2 + replay 29x2, --quit-after 120 with 0 error lines.
+
 *Next entries write themselves: slice B (riding and burrowing), Act 1's fortress boss, the first player-made game from the hub, the christening — the first feedback-to-deploy lap with a human watching a phone.*

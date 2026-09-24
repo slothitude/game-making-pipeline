@@ -76,7 +76,12 @@
 		reverse_proxy 127.0.0.1:8898
 	}
 
-	# everything else -> the arcade front end
+	# root -> the game frontend; admin stays at /manager for setup
+	handle / {
+		redir /frontend/ 302
+	}
+
+	# everything else -> the arcade (frontend + admin + backend all on 8200)
 	handle {
 		reverse_proxy 127.0.0.1:8200
 	}
