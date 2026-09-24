@@ -47,8 +47,12 @@ GAME_ROOTS = "/home/ubuntu/games-src"   # GMP_GAMES_SRC overrides (selftest law)
 SPEC_RELPATHS = ("spec/study_spec.json", "spec/jam_spec.json")  # workflow law:
 # study_spec first, jam_spec as the older fallback (build-milestone.yml order)
 PI_BIN = "pi"
-PI_MODEL = "openrouter/free"
-PI_TIMEOUT = 1800        # milestone-depth build; the brain gets room
+# The alias is a ROUTING LOTTERY: openrouter/free fans out to ~20 backends of
+# wildly varying speed, and a dead pick stalls the whole build silently.
+# GMP_PI_MODEL pins one concrete free model (still openrouter, still free —
+# the workers law is about the lane, not the alias). Default unchanged.
+PI_MODEL = os.environ.get("GMP_PI_MODEL", "openrouter/free")
+PI_TIMEOUT = 900         # a silent hang must cost minutes, not half an hour
 GIT_TIMEOUT = 120
 FORGEJO_HOST = "127.0.0.1:3001"
 FORGEJO_ORG = "slothitude"
