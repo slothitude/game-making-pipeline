@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """exec_art — the T2 lane: hand an art work-order to the deployed
 daily/art_work_order.py (Flux render -> PIL key -> acceptance bounds -> gate
-wall -> export -> ship).
+wall -> asset lands in the game repo).
 
   run(job)   job payload: {game, prompt, asset_id?}
 
 Runs `python3 /home/ubuntu/pipeline/daily/art_work_order.py --game <game>
---prompt <prompt> [--asset-id <asset_id>]` with cwd /home/ubuntu/pipeline/daily
-and GAME_ROOTS=/home/ubuntu/games-src. Non-zero exit raises (the script uses
-2/3/4 for acceptance-fail / gate-red / deploy-fail — the router's retry law
-decides whether the order gets a second swing). Success returns the exit code
-plus the output tails.
+--prompt <prompt> [--asset-id <asset_id>] --no-deploy` with cwd
+/home/ubuntu/pipeline/daily and GAME_ROOTS=/home/ubuntu/games-src. The deploy
+leg is left to the exec_deploy lane (the server has no loopback ssh alias for
+art_work_order's scp step), so the ship order is: render -> gates -> commit ->
+push -> the Actions wall + deploy lane take it from there. Non-zero exit raises
+(the script uses 2/3/4 for acceptance-fail / gate-red / deploy-fail — the
+router's retry law decides whether the order gets a second swing). Success
+returns the exit code plus the output tails.
 """
 
 from __future__ import annotations
@@ -29,11 +32,61 @@ if hasattr(sys.stderr, "reconfigure"):
 SCRIPT = "/home/ubuntu/pipeline/daily/art_work_order.py"
 CWD = "/home/ubuntu/pipeline/daily"
 GAME_ROOTS = "/home/ubuntu/games-src"
-TIMEOUT = 2400  # up to 3 Flux attempts + gate wall + export + ship
+GODOT_BIN = "/home/ubuntu/Godot_v4.7.1-stable_linux.x86_64"
+TIMEOUT = 2400  # up to 3 Flux attempts + gate wall + commit/push
+
+FORGEJO_HOST = os.environ.get("FORGEJO_HOST", "127.0.0.1:3001").strip() \
+    .removeprefix("https://").removeprefix("http://")
+FORGEJO_ORG = os.environ.get("FORGEJO_ORG", "slothitude")
+FORGEJO_TOKEN = os.environ.get("FORGEJO_TOKEN", "")
 
 
 def say(msg):
     print(f"[exec_art] {msg}", flush=True)
+
+
+def _clean(text):
+    """never let the push credential reach a job error / log line"""
+    return text.replace(FORGEJO_TOKEN, "***") if FORGEJO_TOKEN else text
+
+
+def _git(repo, args):
+    proc = subprocess.run(["git", *args], cwd=repo, capture_output=True,
+                          text=True, timeout=180)
+    if proc.returncode != 0:
+        raise RuntimeError(_clean(f"git {' '.join(args[:2])} rc={proc.returncode}: "
+                                  f"{(proc.stderr or proc.stdout)[:250]}"))
+    return proc
+
+
+def _land_asset(root: str, game: str, asset_id: str) -> str:
+    """commit + push the generated PNG (the repo clone's origin already carries
+    the push credential; a FORGEJO_TOKEN in the env takes precedence)."""
+    rel = f"assets/generated/{asset_id}.png"
+    paths = [p for p in (rel, rel + ".import")
+             if os.path.exists(os.path.join(root, p))]
+    if not paths:
+        raise RuntimeError(f"{rel} not on disk after art_work_order — nothing to commit")
+    _git(root, ["add", *paths])
+    proc = subprocess.run(["git", "-c", "user.name=gmp-builder",
+                           "-c", "user.email=gmp-builder@pipeline.local",
+                           "commit", "-m", f"art: {asset_id} ({game}) via exec_art/flux"],
+                          cwd=root, capture_output=True, text=True, timeout=120)
+    out = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0 and "nothing to commit" not in out.lower():
+        raise RuntimeError(_clean(f"git commit rc={proc.returncode}: {out[:250]}"))
+    if "nothing to commit" in out.lower():
+        say("asset already committed — pushing whatever is pending")
+    if FORGEJO_TOKEN:
+        scheme = "http" if FORGEJO_HOST.startswith(("127.", "localhost")) else "https"
+        # _git redacts the token from any error output
+        url = f"{scheme}://{FORGEJO_ORG}:{FORGEJO_TOKEN}@{FORGEJO_HOST}/{FORGEJO_ORG}/{game}.git"
+        _git(root, ["push", url, "HEAD:main"])
+    else:
+        # no token in this env — the clone's origin URL is already credentialed
+        _git(root, ["push", "origin", "HEAD:main"])
+    say("asset committed + pushed — the wall judges it now")
+    return rel
 
 
 def run(job: dict) -> dict:
@@ -44,15 +97,16 @@ def run(job: dict) -> dict:
     if not (game and prompt):
         raise ValueError("art job payload needs 'game' and 'prompt'")
 
-    cmd = ["python3", SCRIPT, "--game", game, "--prompt", prompt]
+    cmd = ["python3", SCRIPT, "--game", game, "--prompt", prompt, "--no-deploy"]
     if asset_id:
         cmd += ["--asset-id", asset_id]
     env = dict(os.environ)
     if not env.get("GAME_ROOTS"):
         # art_work_order.py reads GAME_ROOTS as a JSON dict {game: dir}
         env["GAME_ROOTS"] = json.dumps(
-            {d.name: str(d) for d in pathlib.Path(GAME_ROOTS).iterdir() if d.is_dir()}
-        )
+            {d.name: str(d) for d in pathlib.Path(GAME_ROOTS).iterdir() if d.is_dir()})
+    if not env.get("GODOT_BIN") and os.path.exists(GODOT_BIN):
+        env["GODOT_BIN"] = GODOT_BIN          # the gate wall needs a godot
 
     say(f"id={job.get('id')} art game={game} asset={asset_id or '(auto)'} "
         f"prompt={prompt[:80]!r}")
@@ -73,8 +127,15 @@ def run(job: dict) -> dict:
         raise RuntimeError(
             f"art_work_order exit {proc.returncode} for {game}/{asset_id or '?'}: "
             + " | ".join(err_tail or out_tail))
+
+    landed = None
+    if asset_id:
+        root = json.loads(env["GAME_ROOTS"]).get(game, "")
+        if root and os.path.isdir(root):
+            landed = _land_asset(root, game, asset_id)
     return {"ok": True, "exit": proc.returncode, "game": game,
-            "asset_id": asset_id, "stdout_tail": out_tail, "stderr_tail": err_tail}
+            "asset_id": asset_id, "landed": landed,
+            "stdout_tail": out_tail, "stderr_tail": err_tail}
 
 
 if __name__ == "__main__":
