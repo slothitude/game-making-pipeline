@@ -510,7 +510,7 @@ def _selftest():
          "commit", "-m", "milestone M2 (fake-game) via exec_milestone"],
         ["git", "rev-parse", "--short", "HEAD"],
         ["git", "push",
-         "https://slothitude:d4debb443b2ccc21@127.0.0.1:3001/slothitude/fake-game.git",
+         f"https://slothitude:{FORGEJO_TOKEN}@127.0.0.1:3001/slothitude/fake-game.git",
          "HEAD:main"],
     ]
     assert git_cmds == expected, git_cmds
