@@ -97,7 +97,12 @@ def run(job: dict) -> dict:
     if not (game and prompt):
         raise ValueError("art job payload needs 'game' and 'prompt'")
 
-    cmd = ["python3", SCRIPT, "--game", game, "--prompt", prompt, "--no-deploy"]
+    # Server law (see exec_tune): no local Godot — this box can't run a wall
+    # (956MB RAM; a bare `godot --import` stalls in I/O for 15+ min and blows
+    # the lane timeout). The pushed commit is judged by the Forgejo Actions
+    # wall instead; pixel acceptance still gates the asset locally.
+    cmd = ["python3", SCRIPT, "--game", game, "--prompt", prompt,
+           "--no-deploy", "--no-gates"]
     if asset_id:
         cmd += ["--asset-id", asset_id]
     # optional order tuning the work-order CLI already speaks (schemas/art_work_order.md)
