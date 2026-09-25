@@ -11,6 +11,9 @@ Endpoints:
   GET  /jobs?status=&limit=                              -> {jobs:[...]}
   POST /jobs/claim       {types:[...]}                   -> {job: {...}|null}
   POST /jobs/<id>/result {result}|{error}                -> {id, status}
+  DELETE /jobs/<id>      (or POST /jobs/<id>/cancel)     -> {id, status: cancelled}
+                          queued ONLY — running jobs go through the result
+                          route (the coordinator's race-safe law)
   GET  /health                                           -> {ok, backend, counts}
 """
 
@@ -185,6 +188,19 @@ class SQLiteBackend:
             ).fetchall()
         return {r["status"]: r["n"] for r in rows}
 
+    def cancel(self, job_id):
+        """Delete a QUEUED job. 'deleted' | 'not_found' | 'not_queued'.
+        The DELETE carries its own status guard, so a claim racing the cancel
+        wins and the cancel reports not_queued — never a vanished running job."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM jobs WHERE id = ? AND status = 'queued'", (job_id,))
+            if cur.rowcount > 0:
+                return "deleted"
+            row = conn.execute(
+                "SELECT status FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return "not_found" if row is None else "not_queued"
+
 
 # --------------------------------------------------------------------------
 # Postgres backend (production — retromonkey)
@@ -329,6 +345,25 @@ class PGBackend:
                 cur.execute("SELECT status, COUNT(*) FROM jobs GROUP BY status")
                 return {status: n for status, n in cur.fetchall()}
 
+    def cancel(self, job_id):
+        """Delete a QUEUED job. 'deleted' | 'not_found' | 'not_queued'.
+        The DELETE carries its own status guard, so a claim racing the cancel
+        wins and the cancel reports not_queued — never a vanished running job."""
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM jobs WHERE id = %s AND status = 'queued'
+                    RETURNING id
+                    """,
+                    (job_id,),
+                )
+                if cur.fetchone() is not None:
+                    return "deleted"
+                cur.execute("SELECT status FROM jobs WHERE id = %s", (job_id,))
+                row = cur.fetchone()
+        return "not_found" if row is None else "not_queued"
+
 
 # --------------------------------------------------------------------------
 # HTTP layer
@@ -393,6 +428,42 @@ class QueueHandler(BaseHTTPRequestHandler):
         say(f"GET {parsed.path} -> 404")
         self._json(404, {"error": "not found"})
 
+    # -- DELETE ------------------------------------------------------------
+    def _cancel(self, raw_id):
+        """DELETE /jobs/<id> and POST /jobs/<id>/cancel share this: queued
+        only. A running job must finish through the result route — deleting
+        it here would orphan a worker mid-claim."""
+        try:
+            job_id = int(raw_id)
+        except ValueError:
+            say(f"cancel {raw_id!r} -> 400 (bad job id)")
+            self._json(400, {"error": "bad job id"})
+            return
+        outcome = self.backend.cancel(job_id)
+        if outcome == "deleted":
+            say(f"DELETE /jobs/{job_id} -> cancelled (was queued)")
+            self._json(200, {"id": job_id, "status": "cancelled"})
+        elif outcome == "not_found":
+            say(f"DELETE /jobs/{job_id} -> 404 (no such job)")
+            self._json(404, {"error": "no such job"})
+        else:
+            say(f"DELETE /jobs/{job_id} -> 409 (not queued — running jobs go "
+                f"through the result route)")
+            self._json(409, {"error": "job not in queued"})
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if not self._authed():
+            say(f"DELETE {parsed.path} -> 403 (bad token from {self.client_address[0]})")
+            self._json(403, {"error": "bad X-Token"})
+            return
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) == 2 and parts[0] == "jobs":
+            self._cancel(parts[1])
+            return
+        say(f"DELETE {parsed.path} -> 404")
+        self._json(404, {"error": "not found"})
+
     # -- POST --------------------------------------------------------------
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -449,6 +520,9 @@ class QueueHandler(BaseHTTPRequestHandler):
             return
 
         parts = parsed.path.strip("/").split("/")
+        if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "cancel":
+            self._cancel(parts[1])
+            return
         if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "result":
             try:
                 job_id = int(parts[1])
@@ -492,6 +566,50 @@ class QueueHandler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
 
+# --------------------------------------------------------------------------
+# selftest (offline — sqlite, no HTTP, no network)
+# --------------------------------------------------------------------------
+
+def _selftest():
+    """The cancel law, against a throwaway sqlite db:
+    queued -> deleted and gone; running/done/failed -> not_queued (the result
+    route owns those); unknown id -> not_found."""
+    import tempfile
+
+    db = os.path.join(tempfile.mkdtemp(prefix="gmp_queue_selftest_"), "test.db")
+    backend = SQLiteBackend(db)
+    backend.init()
+
+    jid = backend.enqueue("selftest", {"note": "throwaway"}, 5)
+    assert backend.cancel(jid) == "deleted", "a queued job must cancel"
+    assert backend.list_jobs("queued", 50) == [], "cancelled job must be gone"
+    assert backend.cancel(jid) == "not_found", "a cancelled job is gone-gone"
+    assert backend.cancel(999999) == "not_found", "unknown id -> not_found"
+    say("selftest: queued -> deleted, gone-gone; unknown -> not_found")
+
+    jid = backend.enqueue("selftest", {}, 5)
+    claimed = backend.claim(["selftest"])
+    assert claimed and claimed["id"] == jid, "claim must move it to running"
+    assert backend.cancel(jid) == "not_queued", "running must refuse to cancel"
+    running = backend.list_jobs("running", 50)
+    assert [j["id"] for j in running] == [jid], "running job must survive"
+    say("selftest: running -> not_queued (the result route owns it)")
+
+    backend.complete(jid, {"ok": True})
+    assert backend.cancel(jid) == "not_queued", "done history is not deletable"
+    assert backend.list_jobs("done", 50)[0]["id"] == jid
+    say("selftest: done -> not_queued (history stays)")
+
+    # the race: claim wins over a concurrent cancel, the guard keeps the job
+    jid = backend.enqueue("selftest", {}, 5)
+    backend.claim(["selftest"])
+    assert backend.cancel(jid) == "not_queued"
+    backend.fail(jid, "selftest teardown", permanent=True)
+    assert backend.cancel(jid) == "not_queued", "failed history stays too"
+    say("selftest: cancel law ok — db " + db)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="GMP job queue API")
     ap.add_argument("--backend", choices=("pg", "sqlite"), default="pg",
@@ -500,7 +618,13 @@ def main():
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--host", default=HOST,
                     help="bind address (use the docker gateway for Caddy)")
+    ap.add_argument("--selftest", action="store_true",
+                    help="exercise the cancel law on a throwaway sqlite db "
+                         "and exit (no HTTP, no network)")
     args = ap.parse_args()
+
+    if args.selftest:
+        sys.exit(_selftest())
 
     token = os.environ.get("QUEUE_TOKEN", "").strip()
     if not token:

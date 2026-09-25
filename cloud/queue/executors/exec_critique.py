@@ -2,7 +2,8 @@
 """exec_critique — the ACTIONING wire: run the deployed PlayerOne critic stack
 on a game, then convert its issues into queue jobs so critiques get acted on.
 
-  run(job)   job payload: {game, mode: llm|vision|full, evidence?}
+  run(job)   job payload: {game, mode: llm|vision|full, evidence?,
+                           collect?, seconds?, url?}
              - evidence: inline dict, or a path to an evidence json (optional;
                default is evidence/<game>/latest.json under the PlayerOne root)
              - mode llm/full  -> LLMCritic (ladder: boss -> backup -> gemini
@@ -10,16 +11,29 @@ on a game, then convert its issues into queue jobs so critiques get acted on.
                (llm_critic needs numpy + the ladder env, so it runs in the
                PlayerOne venv, not the router's interpreter)
              - mode vision/full -> vision_critic on the newest screenshot under
-               evidence/<game>/**
+               evidence/<game>/** — and when there is no screenshot yet, the
+               browser leg (collect_evidence) runs first: it drives headless
+               chromium at the live game page ON LAPPY over the tailnet (this
+               956MB box can't hold a browser), scp's the screenshot tar back,
+               and drops it into evidence/<game>/ where the critic reads it.
+               payload collect=true forces a fresh leg even when old shots sit
+               on disk; the local playwright lane is the flag-gated fallback
+               (GMP_CRITIQUE_LOCAL_BROWSER, default on) and usually fails
+               cleanly — no browser, no RAM.
              Returns the critique dict. When the critique has issues, up to 3
              of them are converted (issues_to_jobs) and enqueued at priority 7
              (enqueue) — that last step is the wire the audit found missing.
+             Art issues may only aim at a REAL asset slot (the spec's `art`
+             list + assets/generated); no honest slot -> the art job is
+             skipped, never sent with an invented asset_id.
 
 Server paths (this module runs ON the queue host; the human deploys it there
 unchanged): PlayerOne stack at /home/ubuntu/playerone, its venv python at
-/home/ubuntu/playerone/venv/bin/python, pipeline at /home/ubuntu/pipeline.
+/home/ubuntu/playerone/venv/bin/python, pipeline at /home/ubuntu/pipeline,
+game sources at /home/ubuntu/games-src, Lappy runner at
+/home/aaron/critique-browser/run_evidence.py (see LAPPY_* below).
 
-Selftest (no server, no subprocess):
+Selftest (no server, no subprocess, no network):
     python exec_critique.py --selftest
 """
 
@@ -27,9 +41,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import tarfile
 import tempfile
+import time
 import urllib.request
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -44,11 +61,32 @@ PLAYERONE_PKG_DIRS = [  # driver import roots, first hit wins
 ]
 VENV_PY = "/home/ubuntu/playerone/venv/bin/python"
 PIPELINE_ROOT = "/home/ubuntu/pipeline"
+GAME_ROOTS = os.environ.get("GMP_GAME_ROOTS", "/home/ubuntu/games-src")
 DEFAULT_QUEUE_URL = "http://127.0.0.1:8901"
 MAX_ACTIONED_ISSUES = 3   # a critique never files more than this
 ISSUE_PRIORITY = 7        # background-ish: critique fixes don't jump the queue
 LLM_TIMEOUT = 1800        # the ladder degrades 4 deep; give it room
 VISION_TIMEOUT = 300
+
+# ---- the browser leg lives on Lappy (FIX: this box can't run chromium) -----
+# retromonkey has 956MB RAM and no playwright browser; Lappy has both, and the
+# rsync/ssh-over-tailnet pattern is already proven in queue/lappy_godot_wrapper.
+LAPPY_HOST = "aaron@100.123.86.14"       # tailnet IP
+LAPPY_KEY = os.path.expanduser("~/.ssh/gmp_lappy")
+LAPPY_PY = "/home/aaron/playerone/venv/bin/python"   # playwright lives there
+LAPPY_RUNNER = "/home/aaron/critique-browser/run_evidence.py"
+LAPPY_JOBS = "/home/aaron/gmp-jobs"                  # job scratch (root disk)
+DEFAULT_GAME_URL = "https://retromonkey.com.au/games/{game}/"
+EVIDENCE_SECONDS = 60     # watch window (job payload `seconds` overrides)
+EVIDENCE_CADENCE = 1.5    # seconds between screenshots
+EVIDENCE_KEEP = 12        # ring size — cap the tar, newest wins
+EVIDENCE_TRANSFER_TIMEOUT = 300  # scp over the WAN tailnet path
+# flag-gated fallback: if the Lappy leg dies, the old local playwright lane
+# gets one swing (it has no browser here, so it usually fails cleanly).
+LOCAL_BROWSER_FALLBACK = os.environ.get("GMP_CRITIQUE_LOCAL_BROWSER", "1") != "0"
+SSH_OPTS = ["-i", LAPPY_KEY, "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20",
+            "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=10"]
 
 # an issue whose text leans visual gets the T2 lane (art), everything else
 # actionable gets T1 (tunables)
@@ -105,6 +143,125 @@ def newest_screenshot(game):
     if not shots:
         return None
     return sorted(shots)[-1][1]
+
+
+# ---------------------------------------------------- evidence: browser leg --
+def evidence_spec(game, seconds=None, url=None, cadence=None, keep=None):
+    """The JSON job spec the Lappy runner speaks (pure — selftestable)."""
+    return {
+        "game": game,
+        "url": url or DEFAULT_GAME_URL.format(game=game),
+        "seconds": float(seconds or EVIDENCE_SECONDS),
+        "shot_cadence": float(cadence or EVIDENCE_CADENCE),
+        "keep_shots": int(keep or EVIDENCE_KEEP),
+    }
+
+
+def _ssh_lappy(remote_cmd, timeout):
+    return subprocess.run(["ssh", *SSH_OPTS, LAPPY_HOST, remote_cmd],
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def _scp_lappy(src, dst, timeout=EVIDENCE_TRANSFER_TIMEOUT):
+    return subprocess.run(["scp", "-C", *SSH_OPTS, src, dst],
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def collect_evidence_lappy(game, seconds=None, url=None, cadence=None, keep=None):
+    """The browser leg, executed on Lappy. Only the screenshots travel: the
+    runner shots the live game page there, tars the ring + latest.json, and
+    this side untars it into evidence/<game>/ where the critic already reads.
+    Returns the report dict (latest.json content)."""
+    spec = evidence_spec(game, seconds, url, cadence, keep)
+    remote_job = f"{LAPPY_JOBS}/critique-browser-{game}-{int(time.time())}"
+    scratch = tempfile.mkdtemp(prefix="gmp_evidence_")
+    spec_path = os.path.join(scratch, "spec.json")
+    with open(spec_path, "w", encoding="utf-8") as fh:
+        json.dump(spec, fh, indent=2)
+
+    say(f"browser leg -> {LAPPY_HOST}:{remote_job} "
+        f"({spec['seconds']}s @ {spec['shot_cadence']}s, keep {spec['keep_shots']})")
+    proc = _ssh_lappy(f"mkdir -p '{remote_job}'", timeout=60)
+    if proc.returncode != 0:
+        raise RuntimeError(f"lappy mkdir failed: "
+                           f"{((proc.stderr or '') or (proc.stdout or ''))[-300:]}")
+
+    proc = _scp_lappy(spec_path, f"{LAPPY_HOST}:{remote_job}/spec.json", timeout=120)
+    if proc.returncode != 0:
+        raise RuntimeError(f"lappy spec scp failed: "
+                           f"{((proc.stderr or '') or (proc.stdout or ''))[-300:]}")
+
+    # the runner: one ssh round trip, generous budget for load + shoot + tar
+    budget = spec["seconds"] + 420
+    proc = _ssh_lappy(f"'{LAPPY_PY}' '{LAPPY_RUNNER}' '{remote_job}/spec.json'",
+                      timeout=budget)
+    tail = ((proc.stderr or '') or (proc.stdout or ''))[-400:].strip()
+    if proc.returncode != 0:
+        raise RuntimeError(f"lappy evidence runner exit {proc.returncode}: {tail}")
+    say(f"runner: {tail.splitlines()[-1:] or ['(silent)']}")
+
+    tar_local = os.path.join(scratch, "evidence.tar.gz")
+    proc = _scp_lappy(f"{LAPPY_HOST}:{remote_job}/evidence.tar.gz", tar_local)
+    if proc.returncode != 0:
+        raise RuntimeError(f"lappy tar scp failed: "
+                           f"{((proc.stderr or '') or (proc.stdout or ''))[-300:]}")
+
+    out_dir = os.path.join(PLAYERONE_ROOT, "evidence", game)
+    os.makedirs(out_dir, exist_ok=True)
+    with tarfile.open(tar_local, "r:gz") as tar:
+        for member in tar.getmembers():   # the contract is a flat tar; refuse
+            if os.path.basename(member.name) != member.name:  # anything else
+                raise RuntimeError(f"lappy tar is not flat: {member.name!r}")
+        tar.extractall(out_dir)
+
+    report = {}
+    report_path = os.path.join(out_dir, "latest.json")
+    if os.path.isfile(report_path):
+        with open(report_path, "r", encoding="utf-8") as fh:
+            report = json.load(fh)
+    say(f"browser leg done: {report.get('shots', '?')} shot(s) -> {out_dir}"
+        + (f", error={report['error']}" if report.get("error") else ""))
+    return report
+
+
+def collect_evidence_local(game, seconds=None, url=None):
+    """The old lane: playwright straight on this box. No browser and 365MB of
+    RAM means this usually fails — cleanly, loudly, and never silently."""
+    script = os.path.join(PLAYERONE_ROOT, "collect_evidence.py")
+    if not os.path.isfile(script):
+        raise RuntimeError(f"no local collect_evidence at {script}")
+    seconds = float(seconds or EVIDENCE_SECONDS)
+    cmd = [VENV_PY, script, "--game", game, "--seconds", str(seconds)]
+    if url:
+        cmd += ["--url", url]
+    say(f"local browser leg -> {script} ({seconds}s)")
+    proc = subprocess.run(cmd, cwd=PLAYERONE_ROOT, capture_output=True,
+                          text=True, timeout=seconds + 240)
+    tail = ((proc.stderr or "") or (proc.stdout or ""))[-400:].strip()
+    if proc.returncode != 0:
+        raise RuntimeError(f"collect_evidence failed (exit {proc.returncode}): {tail}")
+    try:
+        return json.loads(proc.stdout or "{}")
+    except ValueError:
+        return {"shots": 0, "note": "local leg ran but printed no report json"}
+
+
+def collect_evidence(game, seconds=None, url=None, cadence=None, keep=None):
+    """Screenshots of the live game, however we can get them: Lappy first
+    (chromium lives there), then the flag-gated local lane."""
+    try:
+        return collect_evidence_lappy(game, seconds, url, cadence, keep)
+    except Exception as exc:  # noqa: BLE001 — the fallback decides, not us
+        say(f"lappy browser leg failed: {str(exc)[:250]}")
+        if not LOCAL_BROWSER_FALLBACK:
+            raise
+        say("trying the local playwright lane (GMP_CRITIQUE_LOCAL_BROWSER=1)")
+        try:
+            return collect_evidence_local(game, seconds, url)
+        except Exception as local_exc:  # noqa: BLE001
+            raise RuntimeError(
+                "no browser anywhere — "
+                f"lappy: {str(exc)[:180]} | local: {str(local_exc)[:180]}") from local_exc
 
 
 # ------------------------------------------------------------------- driver --
@@ -213,10 +370,101 @@ def run_critique(game, mode, evidence, screenshot, timeout=None):
     return critique
 
 
+# ------------------------------------------------------------ art registry --
+# FIX (jobs 72/73): critique prose went out as an art prompt with asset_id
+# "index" and died in art_work_order. Law now: a critique may only aim a
+# render at a REAL slot — the spec's `art` list plus whatever already landed
+# in assets/generated — and the prompt must read like an art prompt.
+ART_STYLE_FALLBACK = "chunky game sprite, bold outline, readable at small size"
+
+
+def _spec_jsons(game):
+    spec_dir = os.path.join(GAME_ROOTS, game, "spec")
+    if not os.path.isdir(spec_dir):
+        return []
+    return [os.path.join(spec_dir, name) for name in sorted(os.listdir(spec_dir))
+            if name.endswith(".json")]
+
+
+def _spec_data(game):
+    for path in _spec_jsons(game):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                yield json.load(fh)
+        except (OSError, ValueError):
+            continue
+
+
+def art_registry(game):
+    """-> sorted list of real asset slots for `game` (spec `art` list + the
+    generated pngs on disk). Empty means no registry: nothing to aim at."""
+    slots = []
+    for data in _spec_data(game):
+        art = data.get("art") if isinstance(data, dict) else None
+        if isinstance(art, list):
+            slots += [str(a).strip() for a in art if str(a).strip()]
+    gen = os.path.join(GAME_ROOTS, game, "assets", "generated")
+    if os.path.isdir(gen):
+        for name in sorted(os.listdir(gen)):
+            stem, ext = os.path.splitext(name)
+            if ext.lower() == ".png" and stem:
+                slots.append(stem)
+    return sorted(set(slots))
+
+
+def art_style(game):
+    """The spec's own art_direction prose — the style suffix on every prompt."""
+    for data in _spec_data(game):
+        if isinstance(data, dict) and str(data.get("art_direction") or "").strip():
+            return str(data["art_direction"]).strip().rstrip(".")
+    return ART_STYLE_FALLBACK
+
+
+def art_prompt(issue, game):
+    """suggestion -> art prompt: the critic's fix idea + the game's own style
+    law, so the render lane gets direction instead of prose about code."""
+    base = (str(issue.get("suggestion") or "").strip()
+            or str(issue.get("description") or "").strip()).rstrip(". ")
+    return f"{base}, {art_style(game)}, game asset sprite"
+
+
+def _slot_tokens(slot):
+    return [t for t in re.split(r"[^a-z0-9]+", slot.lower()) if len(t) >= 3]
+
+
+def match_asset_slot(issue, registry):
+    """Which real slot is this issue talking about? The slot named outright
+    (as its id or as a phrase) wins, then the most complete token match —
+    "wreck beacon" must beat tile_water_dark on a tie of raw hits. None = no
+    honest answer, and a render aimed at nothing is garbage."""
+    if not registry:
+        return None
+    text = " " + " ".join(w for w in re.split(r"[^a-z0-9]+",
+                                              _text_of(issue).lower()) if w) + " "
+    for slot in registry:                                   # 1) named outright
+        if slot.lower() in text or " ".join(_slot_tokens(slot)) in text:
+            return slot
+    best, best_key = None, (0, 0.0)
+    for slot in registry:                   # 2) most complete token coverage
+        toks = _slot_tokens(slot)
+        if len(toks) == 1:      # single-token slots need the exact name above
+            continue
+        hits = sum(1 for t in toks
+                   if re.search(r"\b" + re.escape(t) + r"\b", text))
+        key = (hits, hits / len(toks))
+        if key > best_key:
+            best, best_key = slot, key
+    return best if best_key[0] >= 2 else None
+
+
 # ---------------------------------------------------------------- converter --
 def _text_of(issue):
-    return " ".join(str(issue.get(k) or "") for k in
-                    ("description", "suggestion") + tuple(issue.get("files_hint") or []))
+    """description + suggestion + the files_hint strings themselves (the old
+    version looked the hints up as KEYS, so their text never reached the
+    art/tunable word tests — and slot matching needs them)."""
+    return " ".join(
+        [str(issue.get(k) or "") for k in ("description", "suggestion")]
+        + [str(h) for h in issue.get("files_hint") or []])
 
 
 def _token_value(issue):
@@ -282,7 +530,11 @@ def _is_tunable_sounding(issue):
 def issues_to_jobs(critique: dict) -> list[dict]:
     """Map a critique's actionable issues onto queue jobs (T1/T2 lanes).
 
-    - art-sounding issue            -> {type: generate_art, payload: {game, prompt, asset_id?}}
+    - art-sounding issue            -> {type: generate_art, payload: {game, prompt, asset_id}}
+      but ONLY when a real asset slot answers for it (the game's spec `art`
+      list + assets/generated); the prompt is the suggestion re-aimed as an
+      art prompt with the spec's own art_direction as the style suffix. No
+      honest slot -> the art order is skipped, never sent as garbage.
     - files_hint / tunable-sounding -> {type: tune_tunable, payload: {game, tunable, new_value, ...}}
     - neither (pure vibe)           -> skipped, narrated
     Cap: MAX_ACTIONED_ISSUES jobs per critique. tunable/new_value are
@@ -293,6 +545,15 @@ def issues_to_jobs(critique: dict) -> list[dict]:
     if not game:
         say("critique carries no 'game' — cannot file work-orders")
         return []
+
+    registry = []       # computed once, on the first art issue
+
+    def _registry():
+        nonlocal registry
+        if not registry:
+            registry = art_registry(game)
+            say(f"art registry for {game}: {registry or '(empty — art orders skip)'}")
+        return registry
 
     jobs, skipped = [], []
     for issue in critique.get("issues") or []:
@@ -321,22 +582,36 @@ def issues_to_jobs(critique: dict) -> list[dict]:
             continue
         ad = issue.get("art_directive") or {}
         if ad.get("prompt"):
+            # the critic invents slot names ("index", "player_ship_hi_contrast")
+            # — only a slot the game actually has may go through
+            slot = ad.get("asset_id")
+            if slot not in _registry():
+                slot = match_asset_slot(issue, _registry())
+            if not slot:
+                skipped.append(f"(art prompt, but no real slot in {game}'s "
+                               f"registry) {description[:60]}")
+                continue
             jobs.append({"type": "generate_art", "payload": {
                 "game": ad.get("game") or game,
                 "prompt": ad.get("prompt"),
-                "asset_id": ad.get("asset_id"),
+                "asset_id": slot,
                 "issue": description, "severity": severity, "source": source,
             }, "priority": ISSUE_PRIORITY})
             continue
 
         if _is_artish(issue):
-            payload = {"game": game, "prompt": suggestion or description,
-                       "severity": severity, "source": source}
-            asset_id = _asset_id_from_hint(issue)
-            if asset_id:
-                payload["asset_id"] = asset_id
-            jobs.append({"type": "generate_art", "payload": payload,
-                         "priority": ISSUE_PRIORITY})
+            slot = _asset_id_from_hint(issue)
+            if slot not in _registry():     # kills hint slugs like "index"
+                slot = match_asset_slot(issue, _registry())
+            if not slot:
+                skipped.append(f"(art-sounding, but no real slot in {game}'s "
+                               f"registry) {description[:60]}")
+                continue
+            jobs.append({"type": "generate_art", "payload": {
+                "game": game, "prompt": art_prompt(issue, game),
+                "asset_id": slot,
+                "severity": severity, "source": source,
+            }, "priority": ISSUE_PRIORITY})
             continue
 
         if files_hint or _is_tunable_sounding(issue):
@@ -358,10 +633,10 @@ def issues_to_jobs(critique: dict) -> list[dict]:
             }, "priority": ISSUE_PRIORITY})
             continue
 
-        skipped.append(description[:80])
+        skipped.append(f"(pure vibe) {description[:80]}")
 
     for note in skipped:
-        say(f"issue not actionable (no files_hint, no tunable wording): {note}")
+        say(f"issue not actioned {note}")
     return jobs
 
 
@@ -393,18 +668,27 @@ def run(job: dict) -> dict:
         raise ValueError(f"critique mode must be llm|vision|full, got {mode!r}")
 
     say(f"id={job.get('id')} critique game={game} mode={mode}")
-    evidence, source = load_evidence(game, payload.get("evidence"))
-    say(f"evidence: {source} ({len(evidence)} keys)")
 
     screenshot = None
     if mode in ("vision", "full"):
         screenshot = newest_screenshot(game)
+        if screenshot is None or payload.get("collect"):
+            # the browser leg: headless chromium ON LAPPY (this box can't),
+            # screenshots + console events tar'd back into evidence/<game>/
+            collect_evidence(game, seconds=payload.get("seconds"),
+                             url=payload.get("url"),
+                             cadence=payload.get("shot_cadence"),
+                             keep=payload.get("keep_shots"))
+            screenshot = newest_screenshot(game)
         if screenshot is None:
             raise RuntimeError(
                 f"mode={mode} needs a screenshot but evidence/<game>/** has no "
                 f".png — checked {os.path.join(PLAYERONE_ROOT, 'evidence', game)} "
-                f"(run the emulator lane first)")
+                f"(the browser leg wrote nothing)")
         say(f"screenshot: {screenshot}")
+
+    evidence, source = load_evidence(game, payload.get("evidence"))
+    say(f"evidence: {source} ({len(evidence)} keys)")
 
     critique = run_critique(game, mode, evidence, screenshot)
     critique.setdefault("game", game)
@@ -427,50 +711,131 @@ def run(job: dict) -> dict:
 
 # ------------------------------------------------------------------ selftest --
 def _selftest():
-    """issues_to_jobs on a canned critique — no server, no subprocess."""
+    """issues_to_jobs + the Lappy spec builder — no server, no subprocess,
+    no network. The art registry reads a throwaway fixture game root."""
+    global GAME_ROOTS
+
+    # ---- fixture game root: a spec with an `art` list + one generated png
+    fixture_root = tempfile.mkdtemp(prefix="gmp_critique_selftest_")
+    game = "moon-ladder"
+    spec_dir = os.path.join(fixture_root, game, "spec")
+    gen_dir = os.path.join(fixture_root, game, "assets", "generated")
+    os.makedirs(spec_dir)
+    os.makedirs(gen_dir)
+    with open(os.path.join(spec_dir, "jam_spec.json"), "w",
+              encoding="utf-8") as fh:
+        json.dump({"art": ["rung_marker", "wreck_beacon", "sub_player",
+                           "tile_water_dark"],
+                   "art_direction": "sunken ship cartoon, glowing beacon "
+                                    "neon, bold outlines"}, fh, indent=2)
+    open(os.path.join(gen_dir, "rung_marker.png"), "wb").close()
+    GAME_ROOTS = fixture_root
+
+    # ---- registry + slot matching laws
+    reg = art_registry(game)
+    assert reg == ["rung_marker", "sub_player", "tile_water_dark",
+                   "wreck_beacon"], reg
+    say(f"selftest: registry {reg}")
+    assert art_style(game).startswith("sunken ship cartoon"), art_style(game)
+
+    hinted = {"description": "beacon unreadable", "files_hint":
+              ["assets/generated/wreck_beacon.png"]}
+    assert match_asset_slot(hinted, reg) == "wreck_beacon"
+    tokeny = {"description": "the ship is invisible against the water",
+              "suggestion": "repaint the sub player sprite, bright hull"}
+    assert match_asset_slot(tokeny, reg) == "sub_player"
+    # the tie law: "wreck beacon" (2/2 tokens, named as a phrase) must beat
+    # tile_water_dark (2/3) — the live bug this matcher was rewritten for
+    tie = {"description": "the wreck beacon is unreadable against the dark "
+                          "water", "suggestion": "repaint it brighter"}
+    assert match_asset_slot(tie, reg) == "wreck_beacon", match_asset_slot(tie, reg)
+    garbage = {"description": "add a loading indicator with progress",
+               "suggestion": "audit what's blocking for 7s",
+               "files_hint": ["index.html"]}
+    assert match_asset_slot(garbage, reg) is None, "prose must not invent slots"
+    assert match_asset_slot(garbage, []) is None
+    say("selftest: slot matching — exact > tokens > none ok")
+
+    # ---- full mapping, the jobs 72/73 shapes must never come back
     canned = {
-        "game": "moon-ladder",
+        "game": game,
         "verdict": "fun core loop, but the tide is unfair and the UI is muddy",
-        "scores": {"fun": 6, "polish": 4, "readability": 5,
-                   "phone_ux": 5, "adhd_friendly": 7},
         "issues": [
             {"severity": "blocker",
-             "description": "the tide rises about twice as fast as I can climb — "
-                            "death felt arbitrary around rung 30",
-             "suggestion": "slow the rise: try FALL_SPEED 420 and TIDE_RATE 0.5 "
-                           "before touching level design",
-             "files_hint": ["scripts/tide.gd", "consts/tunables.gd"]},
+             "description": "the tide rises about twice as fast as I can climb",
+             "suggestion": "slow the rise: try FALL_SPEED 420 and TIDE_RATE 0.5",
+             "files_hint": ["scripts/tide.gd"]},
             {"severity": "annoyance",
-             "description": "rungs blend into the background wall, I misjudged "
-                            "jumps constantly",
-             "suggestion": "sunken ship beacon, glowing, game sprite, high contrast "
-                           "rung marker",
+             "description": "rungs blend into the background wall",
+             "suggestion": "glowing marker, high contrast",
              "files_hint": ["assets/generated/rung_marker.png"]},
             {"severity": "annoyance",
-             "description": "sound cuts out if you tab away and come back",
-             "suggestion": "retrigger the music bus on focus return",
-             "files_hint": ["scripts/audio.gd"]},
-            {"severity": "polish",
-             "description": "the game is genuinely charming, title screen could "
-                            "use a pulse animation",
-             "suggestion": "add a gentle pulse to the title",
-             "files_hint": []},
+             "description": "the player avatar is nearly invisible",
+             "suggestion": "repaint the ship, bright hull, dark outline",
+             "art_directive": {"prompt": "top-down pixel-art player ship "
+                                         "sprite, 32x32, high contrast",
+                               "asset_id": "player_ship_hi_contrast"}},
+            {"severity": "annoyance",
+             "description": "no loading feedback for 7s (likely asset decode "
+                            "or audio init)",
+             "suggestion": "add a loading indicator with progress, defer "
+                           "assets until after the first frame renders",
+             "files_hint": ["index.html"]},
+            {"severity": "annoyance",
+             "description": "the wreck beacon art is muddy",
+             "art_directive": {"prompt": "wreck beacon, glowing, game sprite",
+                               "asset_id": "index"}},
             {"severity": "polish",
              "description": "a pure vibe with no hint at all",
-             "suggestion": "make it pop more",
-             "files_hint": []},
-            {"severity": "polish",
-             "description": "fifth actionable — must be dropped by the cap",
-             "suggestion": "spawn rate feels stingy",
-             "files_hint": ["scripts/spawner.gd"]},
+             "suggestion": "make it pop more"},
+            {"severity": "annoyance",
+             "description": "sound cuts out if you tab away",
+             "suggestion": "retrigger the music bus on focus return",
+             "files_hint": ["scripts/audio.gd"]},
         ],
     }
-    say(f"selftest: canned critique, {len(canned['issues'])} issues "
-        f"(cap {MAX_ACTIONED_ISSUES})")
     jobs = issues_to_jobs(canned)
     print(json.dumps(jobs, indent=2))
-    say(f"selftest: {len(jobs)} job dicts (expect {MAX_ACTIONED_ISSUES}, "
-        f"vibe-only issue skipped, 5th actionable dropped by the cap)")
+    by_type = {}
+    for j in jobs:
+        by_type.setdefault(j["type"], []).append(j["payload"].get("asset_id"))
+    assert by_type.get("tune_tunable") == [None], by_type
+    art_slots = by_type.get("generate_art") or []
+    assert art_slots == ["rung_marker", "wreck_beacon"], art_slots
+    assert "index" not in art_slots and "player_ship_hi_contrast" not in art_slots
+    art_payloads = [j["payload"] for j in jobs if j["type"] == "generate_art"]
+    for payload in art_payloads:
+        assert payload["prompt"] and "," in payload["prompt"], payload
+    # the artish fallback gets the style-suffixed prompt; a structured
+    # art_directive prompt passes through as the critic wrote it
+    assert art_payloads[0]["prompt"].endswith(
+        "game asset sprite"), art_payloads[0]["prompt"]
+    assert "sunken ship cartoon" in art_payloads[0]["prompt"]
+    assert art_payloads[1]["prompt"] == "wreck beacon, glowing, game sprite"
+    assert len(jobs) <= MAX_ACTIONED_ISSUES
+    say(f"selftest: {len(jobs)} job(s) — art only at real slots "
+        f"{art_slots}, prose-only and invented-slot art skipped")
+
+    # ---- a game with no registry at all: art orders must skip, not fire
+    empty_game_root = tempfile.mkdtemp(prefix="gmp_critique_selftest_")
+    os.makedirs(os.path.join(empty_game_root, "bare-game"))
+    GAME_ROOTS = empty_game_root
+    bare = issues_to_jobs({"game": "bare-game", "issues": [
+        {"description": "the background is muddy",
+         "suggestion": "paint a new background",
+         "art_directive": {"prompt": "dark water background", "asset_id": "bg"}}]})
+    assert bare == [], bare
+    say("selftest: registry-less game -> no art jobs ok")
+    GAME_ROOTS = fixture_root
+
+    # ---- the Lappy job spec (pure — no ssh here)
+    spec = evidence_spec("sonar", seconds=45, url="https://x.test/g/")
+    assert spec == {"game": "sonar", "url": "https://x.test/g/",
+                    "seconds": 45.0, "shot_cadence": 1.5, "keep_shots": 12}, spec
+    default = evidence_spec("slime-line")
+    assert default["url"] == DEFAULT_GAME_URL.format(game="slime-line")
+    assert default["seconds"] == EVIDENCE_SECONDS
+    say(f"selftest: evidence_spec {default}")
 
     empty = issues_to_jobs({"verdict": "no game key"})
     assert empty == [], "critique without 'game' must map to no jobs"
