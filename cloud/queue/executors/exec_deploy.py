@@ -9,6 +9,12 @@
     preset, exports headless with the server's native godot, then rsyncs the
     fresh build to GMP_SITE_GAMES/<game>/ (--delete: the served dir mirrors
     exactly what the export produced — a stale file is a stale game).
+    Preset gap: pi never writes export_presets.cfg, so a game can reach this
+    lane green and still have nothing to export. When the cfg is missing or
+    carries no Web block the standard Web preset is SYNTHESIZED into the repo
+    (sonar's proven shape), the export dir is created (godot does not mkdir
+    it), and the file is committed via the lane's Forgejo push law so future
+    deploys and fresh clones find it.
     Template check first: if the web export templates are missing they are
     downloaded once into ~/.local/share/godot/export_templates/<ver>/
     (FIX-PLAN Wire 1 part 1; they are installed today).
@@ -39,6 +45,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 SITE_URL_BASE = "https://retromonkey.com.au/games/"
 RSYNC_TIMEOUT = 900
+GIT_TIMEOUT = 120              # preset commit/push only — never a clone
 EXPORT_TIMEOUT = 1800          # first run imports the project — that is slow
 TEMPLATE_TPZ_URL = ("https://github.com/godotengine/godot/releases/download/"
                     "{ver}/Godot_v{ver}_export_templates.tpz")
@@ -99,6 +106,157 @@ def web_preset(repo):
     raise RuntimeError(
         f"no Web export preset in {path} — have: "
         + (", ".join(found) or "(none)"))
+
+
+# The standard Web preset, copied from sonar's proven export_presets.cfg (the
+# reference build of this lane). export_path is the relative form godot
+# resolves against the project dir; variant/thread_support=false matches the
+# web_nothreads template the server ships.
+WEB_PRESET_TEMPLATE = """[preset.0]
+
+name="Web"
+platform="Web"
+runnable=true
+advanced_options=false
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/web/index.html"
+patches=PackedStringArray()
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+variant/extensions_support=false
+variant/thread_support=false
+vram_texture_compression/for_desktop=true
+vram_texture_compression/for_mobile=false
+html/export_icon=true
+html/custom_html_shell=""
+html/head_include=""
+html/canvas_resize_policy=2
+html/focus_canvas_on_start=true
+html/experimental_virtual_keyboard=false
+progressive_web_app/enabled=false
+progressive_web_app/ensure_cross_origin_isolation_headers=true
+progressive_web_app/offline_page=""
+progressive_web_app/display=1
+progressive_web_app/orientation=0
+progressive_web_app/icon_144x144=""
+progressive_web_app/icon_180x180=""
+progressive_web_app/icon_512x512=""
+progressive_web_app/background_color=Color(0, 0, 0, 1)
+"""
+
+
+def _next_preset_index(text):
+    """First free [preset.N] index in an existing export_presets.cfg."""
+    return 1 + max((int(m.group(1)) for m in
+                    re.finditer(r"^\[preset\.(\d+)\]", text, re.MULTILINE)),
+                   default=-1)
+
+
+def ensure_web_preset(game_dir, game=None):
+    """-> (preset_name, export_path) — the repo's Web preset, synthesized if
+    the repo does not have one.
+
+    pi writes milestones but never export_presets.cfg, so a game can arrive
+    here green with nothing to export (powder-run, jezzball: both died on
+    "no export_presets.cfg"). Missing cfg -> write the standard template; cfg
+    without a Web block -> append the Web preset at the next free index and
+    leave every existing preset untouched. The export folder is created here
+    (godot does not mkdir it — the Wire 1 lane's own law) and the synthesized
+    file is committed via the lane's Forgejo push law."""
+    game = game or os.path.basename(game_dir.rstrip("/"))
+    path = os.path.join(game_dir, "export_presets.cfg")
+    if os.path.isfile(path):
+        try:
+            return web_preset(game_dir)
+        except RuntimeError as miss:
+            old = open(path, encoding="utf-8").read()
+            idx = _next_preset_index(old)
+            # the .options header first: "[preset.0.options]" does not contain
+            # the substring "[preset.0]", so one blind replace would leave the
+            # synthesized options under a DUPLICATE [preset.0.options] section
+            block = (WEB_PRESET_TEMPLATE
+                     .replace("[preset.0.options]", f"[preset.{idx}.options]")
+                     .replace("[preset.0]", f"[preset.{idx}]"))
+            text = old.rstrip("\n") + "\n\n" + block
+            say(f"no Web preset in {path} ({str(miss)[:70]}) — appending "
+                f"synthesized [preset.{idx}] Web block, existing presets kept")
+    else:
+        text = WEB_PRESET_TEMPLATE
+        say(f"no export_presets.cfg in {game_dir} — synthesizing the standard "
+            f"Web preset (sonar shape)")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    os.makedirs(os.path.join(game_dir, "build", "web"), exist_ok=True)
+    _ship_preset(game_dir, game)
+    return web_preset(game_dir)
+
+
+def _ship_preset(game_dir, game):
+    """Commit the synthesized export_presets.cfg so future deploys (and fresh
+    clones) find it. git_ship's law — inline identity, push HEAD:main at the
+    Forgejo origin built from FORGEJO_HOST/ORG/TOKEN env — but surgical: only
+    the preset file is staged, never a sweep of the repo's other untracked
+    files. A push that cannot happen (no token, no remote, rejected branch) is
+    logged, not fatal: this export uses the working-tree file either way."""
+    if not os.path.isdir(os.path.join(game_dir, ".git")):
+        say("preset synthesized but not committed — no .git here")
+        return None
+
+    def _git(args, check=True):
+        proc = module_subprocess.run(["git"] + args, cwd=game_dir,
+                                     capture_output=True, text=True,
+                                     timeout=GIT_TIMEOUT)
+        if check and proc.returncode != 0:
+            raise RuntimeError(
+                f"git {' '.join(args[:2])} exit {proc.returncode}: "
+                f"{((proc.stderr or '') or (proc.stdout or ''))[-300:].strip()}")
+        return proc
+
+    try:
+        _git(["add", "export_presets.cfg"])
+        c = _git(["-c", "user.name=gmp-deploy", "-c",
+                  "user.email=gmp-deploy@pipeline.local", "commit", "-m",
+                  f"deploy: synthesize Web export preset ({game})"],
+                 check=False)
+        if "nothing to commit" in (c.stdout or "") + (c.stderr or ""):
+            say("preset already committed — nothing to do")
+            return None
+        rev = _git(["rev-parse", "--short", "HEAD"]).stdout.strip()
+    except (RuntimeError, OSError) as exc:
+        say(f"preset commit failed (deploy continues): {str(exc)[:140]}")
+        return None
+
+    host = (os.environ.get("FORGEJO_HOST", "127.0.0.1:3001").strip()
+            or "127.0.0.1:3001")
+    org = os.environ.get("FORGEJO_ORG", "slothitude")
+    tok = os.environ.get("FORGEJO_TOKEN", "")
+    scheme = "http" if host.startswith(("127.", "localhost", "[")) else "https"
+    if not tok:
+        say(f"preset committed at {rev} — FORGEJO_TOKEN not set, not pushed "
+            f"(this export uses the working-tree file)")
+        return rev
+    url = f"{scheme}://{org}:{tok}@{host}/{org}/{game}.git"
+    try:
+        _git(["push", url, "HEAD:main"])
+        say(f"pushed {rev} -> {org}/{game}.git HEAD:main "
+            f"(the Actions gate wall judges it)")
+    except (RuntimeError, OSError) as exc:
+        say(f"preset push failed (deploy continues): "
+            f"{str(exc).split('@')[-1][:140]}")
+    return rev
 
 
 # ---------------------------------------------------------------- templates --
@@ -225,7 +383,7 @@ def run(job: dict) -> dict:
             f"no repo clone for {game!r} at {game_dir} — the game must be "
             f"cloned under {games_src()} first (new_game does this)")
 
-    preset, out_rel = web_preset(game_dir)
+    preset, out_rel = ensure_web_preset(game_dir, game)
     dry_run = bool(payload.get("dry_run")) or os.environ.get("GMP_DEPLOY_DRY_RUN") == "1"
     if payload.get("skip_export"):
         build = os.path.dirname(os.path.join(game_dir, out_rel))
@@ -269,8 +427,10 @@ def run(job: dict) -> dict:
 
 
 def _selftest():
-    """Fake repo (real export_presets.cfg) + monkeypatched godot/rsync: the
-    preset parse, the export command shape, the rsync flags, honest misses."""
+    """Fake repo + monkeypatched godot/rsync (and no .git, so the preset
+    commit law never fires): the preset parse, the preset synthesis (missing
+    cfg, Web-less cfg, untouched cfg), the export command shape, the rsync
+    flags, honest misses, the hung-godot straggler."""
     global module_subprocess, module_urlopen
     root = tempfile.mkdtemp(prefix="gmp_deploy_test_").replace(os.sep, "/")
     site_root = tempfile.mkdtemp(prefix="gmp_deploy_site_").replace(os.sep, "/")
@@ -359,19 +519,72 @@ def _selftest():
         else:
             raise AssertionError(f"{payload} must raise")
 
-    with open(os.path.join(game_dir, "export_presets.cfg"), "w",
-              encoding="utf-8") as fh:
-        fh.write('[preset.0]\n\nname="Linux"\nplatform="Linux"\n')
-    try:
-        run({"id": "nopreset", "payload": {"game": "moon-ladder",
-                                           "target": "retromonkey"}})
-    except RuntimeError as exc:
-        assert "no Web export preset" in str(exc) and "Linux" in str(exc)
-        say("selftest: no-Web-preset -> RuntimeError listing what was there")
-    else:
-        raise AssertionError("missing Web preset must raise")
+    def last_godot_cmd():
+        return recorded[-2]["cmd"]          # [-1] is the rsync call
 
-    # --- 5. godot finishes the build then will not exit ----------------------
+    def synth_run(payload):
+        """The synthesis scenarios run after the baseline restored .run —
+        re-apply the same monkeypatch shield the baseline used."""
+        module_subprocess.Popen = FakePopen
+        module_subprocess.run = fake_rsync
+        try:
+            return run(payload)
+        finally:
+            module_subprocess.run = real_run
+            module_subprocess.Popen = FakePopen
+
+    cfg_path = os.path.join(game_dir, "export_presets.cfg")
+
+    # --- 4. cfg present but no Web block in it -> Web is APPENDED ----------
+    with open(cfg_path, "w", encoding="utf-8") as fh:
+        fh.write('[preset.0]\n\nname="Linux"\nplatform="Linux"\n'
+                 'export_path="build/linux/ml.x86_64"\n')
+    result = synth_run({"id": "selftest-append", "payload": {
+        "game": "moon-ladder", "target": "retromonkey"}})
+    assert result["ok"], result
+    assert last_godot_cmd()[-3:-1] == ["--export-release", "Web"], \
+        last_godot_cmd()
+    text = open(cfg_path, encoding="utf-8").read()
+    assert 'name="Linux"' in text and 'name="Web"' in text, text
+    assert "[preset.1]" in text and "[preset.1.options]" in text, text
+    assert text.index('name="Linux"') < text.index("[preset.1]"), \
+        "the existing preset must survive, untouched, before the appended one"
+    assert os.path.isdir(os.path.join(game_dir, "build", "web"))
+    assert not any(cmd["cmd"][:1] == ["git"] for cmd in recorded), \
+        "the selftest sandbox has no .git — no git call may happen"
+    say("selftest 4: cfg without a Web preset -> Web block appended at "
+        "[preset.1], Linux preset kept, export dir created")
+
+    # --- 5. no export_presets.cfg at all -> the standard preset is written -
+    os.remove(cfg_path)
+    result = synth_run({"id": "selftest-synth", "payload": {
+        "game": "moon-ladder", "target": "retromonkey"}})
+    assert result["ok"], result
+    assert last_godot_cmd()[-3:-1] == ["--export-release", "Web"], \
+        last_godot_cmd()
+    assert last_godot_cmd()[-1].endswith("build/web/index.html"), \
+        last_godot_cmd()
+    text = open(cfg_path, encoding="utf-8").read()
+    assert text == WEB_PRESET_TEMPLATE, "synthesized cfg must be the template"
+    assert 'export_path="build/web/index.html"' in text, text
+    say("selftest 5: missing export_presets.cfg -> sonar-shape Web preset "
+        "synthesized, export path build/web/index.html")
+
+    # --- 6. a cfg that already has Web -> untouched, no second write -------
+    with open(cfg_path, "w", encoding="utf-8") as fh:
+        fh.write('[preset.0]\n\nname="Web"\nplatform="Web"\n'
+                 'export_path="build/web/index.html"\n')
+    before = open(cfg_path, encoding="utf-8").read()
+    result = synth_run({"id": "selftest-kept", "payload": {
+        "game": "moon-ladder", "target": "retromonkey"}})
+    assert result["ok"], result
+    assert open(cfg_path, encoding="utf-8").read() == before, \
+        "an existing Web preset must be left exactly as it was"
+    assert last_godot_cmd()[-3:-1] == ["--export-release", "Web"], \
+        last_godot_cmd()
+    say("selftest 6: existing Web preset -> cfg byte-identical, deploy as before")
+
+    # --- 7. godot finishes the build then will not exit ----------------------
     # (observed on the loaded server: build DONE, process idles) — the fresh
     # artifacts must end the wait, terminate the straggler, and still ship.
     with open(os.path.join(game_dir, "export_presets.cfg"), "w",
@@ -412,9 +625,9 @@ def _selftest():
         else:
             os.environ["GMP_GODOT_TEMPLATES"] = real_tpl
     assert result["ok"] and result["build_dir"].endswith("build/web"), result
-    say("selftest 5: build settles + godot idles -> artifacts win, straggler "
+    say("selftest 7: build settles + godot idles -> artifacts win, straggler "
         "terminated, deploy still ships")
-    say("selftest: PASS")
+    say("selftest: PASS (7 scenarios)")
     return 0
 
 
