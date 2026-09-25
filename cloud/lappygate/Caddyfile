@@ -10,79 +10,96 @@
 #   /portainer/*   -> Portainer   (9443 tls)
 #   /media/*       -> Jellyfin    (8097)
 
+# Auth law: the widget passthrough and the auth catch-all are the ONLY two
+# top-level handle blocks (neither has a path matcher, so Caddy keeps file
+# order: /__* hits the gate UI first). Every other request falls through to
+# the forward_auth probe, and the service handles live INSIDE that catch-
+# all's `route` so they only run after auth passes. (They used to sit next
+# to the auth handle: handle blocks are mutually exclusive and path-sorted,
+# so every specific service handle evaluated before the auth catch-all and
+# nothing was gated.)
 (backend_auth) {
 	@widget path /__login /__auth /__verify /__whoami
 	handle @widget {
 		reverse_proxy 127.0.0.1:9010
 	}
 	handle {
-		forward_auth 127.0.0.1:9010 {
-			uri /__verify
+		route {
+			forward_auth 127.0.0.1:9010 {
+				uri /__verify
+			}
+
+			# EmulatorJS backend: socket.io + API must reach 3001 (mapped 8201)
+			handle /socket.io/* {
+				reverse_proxy 127.0.0.1:8201
+			}
+			handle /emuback/* {
+				uri strip_prefix /emuback
+				reverse_proxy 127.0.0.1:8201
+			}
+			handle /data/* {
+				reverse_proxy 127.0.0.1:8201
+			}
+
+			handle /chat/* {
+				uri strip_prefix /chat
+				reverse_proxy 127.0.0.1:3080
+			}
+
+			handle /portainer/* {
+				uri strip_prefix /portainer
+				reverse_proxy https://127.0.0.1:9443 {
+					transport http {
+						tls_insecure_skip_verify
+					}
+				}
+			}
+
+			handle /media/* {
+				uri strip_prefix /media
+				reverse_proxy 127.0.0.1:8097
+			}
+
+			handle /comfy/* {
+				uri strip_prefix /comfy
+				reverse_proxy 127.0.0.1:8188
+			}
+
+			handle /search/* {
+				uri strip_prefix /search
+				reverse_proxy 127.0.0.1:8896
+			}
+
+			handle /forgejo/* {
+				uri strip_prefix /forgejo
+				reverse_proxy 127.0.0.1:3000
+			}
+
+			handle /reader/* {
+				uri strip_prefix /reader
+				reverse_proxy 127.0.0.1:8898
+			}
+
+			# root -> the generated game frontend (container port 80, host 8202);
+			# admin/management UI stays on 8200. (redir grammar is <from> <to>
+			# <code> — the old `redir /frontend/ 302` meant "redirect /frontend/
+			# to 302", a matcher that never fired, so root fell through to 8200.)
+			handle / {
+				redir / /frontend/ 302
+			}
+			handle /frontend/* {
+				uri strip_prefix /frontend
+				reverse_proxy 127.0.0.1:8202
+			}
+
+			# everything else -> the arcade (frontend + admin + backend all on 8200)
+			handle {
+				reverse_proxy 127.0.0.1:8200
+			}
 		}
 	}
 }
 
 :9200 {
 	import backend_auth
-
-	# EmulatorJS backend: socket.io + API must reach port 3001 (mapped 8201)
-	handle /socket.io/* {
-		reverse_proxy 127.0.0.1:8201
-	}
-	handle /emuback/* {
-		uri strip_prefix /emuback
-		reverse_proxy 127.0.0.1:8201
-	}
-	handle /data/* {
-		reverse_proxy 127.0.0.1:8201
-	}
-
-	handle /chat/* {
-		uri strip_prefix /chat
-		reverse_proxy 127.0.0.1:3080
-	}
-
-	handle /portainer/* {
-		uri strip_prefix /portainer
-		reverse_proxy https://127.0.0.1:9443 {
-			transport http {
-				tls_insecure_skip_verify
-			}
-		}
-	}
-
-	handle /media/* {
-		uri strip_prefix /media
-		reverse_proxy 127.0.0.1:8097
-	}
-
-	handle /comfy/* {
-		uri strip_prefix /comfy
-		reverse_proxy 127.0.0.1:8181
-	}
-
-	handle /search/* {
-		uri strip_prefix /search
-		reverse_proxy 127.0.0.1:8896
-	}
-
-	handle /forgejo/* {
-		uri strip_prefix /forgejo
-		reverse_proxy 127.0.0.1:3000
-	}
-
-	handle /reader/* {
-		uri strip_prefix /reader
-		reverse_proxy 127.0.0.1:8898
-	}
-
-	# root -> the game frontend; admin stays at /manager for setup
-	handle / {
-		redir /frontend/ 302
-	}
-
-	# everything else -> the arcade (frontend + admin + backend all on 8200)
-	handle {
-		reverse_proxy 127.0.0.1:8200
-	}
 }
