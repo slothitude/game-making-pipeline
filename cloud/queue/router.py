@@ -17,7 +17,9 @@ import time
 import urllib.error
 import urllib.request
 
-ALL_TYPES = ["llm", "device_test", "gpu", "gate", "deploy", "emulator", "critique"]
+# critique removed 2026-10-01: the Lappy playerone worker owns that lane; the
+# router's exec_not_wired was racing it and double-erroring critiques dead.
+ALL_TYPES = ["llm", "device_test", "gpu", "gate", "deploy", "emulator"]
 DEFAULT_API = "http://127.0.0.1:8901"
 
 if hasattr(sys.stdout, "reconfigure"):
